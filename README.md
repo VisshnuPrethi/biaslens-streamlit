@@ -1,4 +1,6 @@
-# ⚖️ BiasLens — Real-Time Bias Auditing for Enterprise AI Agents
+# ⚖️ BiasLens — Real-Time Bias Auditing for Enterprise AI Agents   
+
+The application will be available at: https://biaslens-app-q35jvvcfcwn8a8gvbnxmkb.streamlit.app/
 
 > **Continuous, counterfactual, statistically rigorous bias auditing for AI-powered decision systems.**
 
@@ -71,7 +73,7 @@ Credit Score: 665
 Loan Amount: $25,000
 Employment: 4 years
 
-Name: [Counterfactual Name]
+
 ```
 
 Both applications are independently evaluated by the target AI agent.
@@ -446,7 +448,7 @@ Once uploaded, the dashboard automatically populates the relevant charts and tab
 Clone the repository:
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
+git clone (https://github.com/VisshnuPrethi/biaslens-streamlit)
 cd biaslens
 ```
 
