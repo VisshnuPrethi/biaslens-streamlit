@@ -204,8 +204,8 @@ def export_looker_table(
     summary_report: Dict[str, Any],
     output_csv: Optional[str] = "data/looker_bias_metrics.csv",
     save_to_bq: bool = False,
-    bq_dataset_id: Optional[str] = None,
-    bq_table_id: str = "looker_bias_metrics",
+    run_id: Optional[str] = None,
+    demographic_attribute: str = "race_ethnicity",
 ) -> pd.DataFrame:
     """
     Format statistical metrics into a flattened Looker Studio-ready table with the exact columns:
@@ -263,21 +263,17 @@ def export_looker_table(
         df.to_csv(output_csv, index=False, encoding="utf-8")
         print(f"Looker Studio CSV saved successfully to: {output_csv}")
 
-    # Optionally push to BigQuery
+    # Optionally push to BigQuery, tagged with a run_id so the dashboard and
+    # Looker Studio can always read "the latest run" and, later, drift over time.
     if save_to_bq:
         try:
-            from google.cloud import bigquery
-            project_id = os.environ.get("GCP_PROJECT_ID")
-            dataset_id = bq_dataset_id or os.environ.get("BQ_DATASET_ID", "biaslens_data")
-            client = bigquery.Client(project=project_id) if project_id else bigquery.Client()
-            table_ref = f"{client.project}.{dataset_id}.{bq_table_id}"
-            
-            job_config = bigquery.LoadJobConfig(
-                write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
-            )
-            job = client.load_table_from_dataframe(df, table_ref, job_config=job_config)
-            job.result()
-            print(f"BigQuery table successfully updated at: {table_ref}")
+            try:
+                from bq_logger import log_bias_metrics, new_run_id
+            except ImportError:
+                from biaslens.bq_logger import log_bias_metrics, new_run_id
+            run_id = run_id or new_run_id()
+            log_bias_metrics(df, run_id=run_id, demographic_attribute=demographic_attribute)
+            print(f"BigQuery bias_metrics table updated successfully (run_id={run_id}).")
         except Exception as e:
             print(f"[BigQuery Notice] Could not upload directly to BigQuery ({e}). CSV is available for Looker connection.")
 

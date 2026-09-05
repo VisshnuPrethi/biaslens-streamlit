@@ -6,7 +6,7 @@ venv/
 # Environment files
 .env
 *.env
-
+service-account-key.json
 # Python bytecode & cache
 __pycache__/
 *.py[cod]
