@@ -19,9 +19,9 @@ import altair as alt
 # `biaslens/` package layout (modules imported as biaslens.<module>).
 # ---------------------------------------------------------------------------
 try:
-    from pair_generator import create_loan_pair, build_loan_prompt, DEMOGRAPHIC_NAME_PAIRS
+    from pair_generator import create_loan_pair, build_loan_prompt, DEMOGRAPHIC_NAME_PAIRS, GENDER_NAME_PAIRS
 except ImportError:
-    from biaslens.pair_generator import create_loan_pair, build_loan_prompt, DEMOGRAPHIC_NAME_PAIRS
+    from biaslens.pair_generator import create_loan_pair, build_loan_prompt, DEMOGRAPHIC_NAME_PAIRS, GENDER_NAME_PAIRS
 
 try:
     from target_agent import query_gemini_agent
@@ -65,6 +65,14 @@ except Exception:
     pass  # no secrets.toml present (e.g. local run using .env) - fine, dotenv handles it
 
 COUNTERFACTUAL_GROUPS = sorted({p["counterfactual_group"] for p in DEMOGRAPHIC_NAME_PAIRS})
+
+# Maps a human-readable dimension name -> (name-pair catalog, demographic_attribute value).
+# Adding a new dimension later (e.g. age) is just one more entry here plus a name-pair catalog
+# in pair_generator.py - nothing else in this page needs to change.
+DIMENSION_CATALOGS = {
+    "Race / Ethnicity": {"pairs": DEMOGRAPHIC_NAME_PAIRS, "attribute": "race_ethnicity"},
+    "Gender": {"pairs": GENDER_NAME_PAIRS, "attribute": "gender"},
+}
 
 
 def parse_decision(raw_response: str):
@@ -366,6 +374,12 @@ SAMPLE_GEO_DATA = pd.DataFrame([
      "p_value": None, "significance_flag": "N/A"},
 ])
 
+SAMPLE_GENDER_DATA = pd.DataFrame([
+    {"group_name": "Female", "control_approval_rate": None,
+     "counterfactual_approval_rate": None, "disparity_pp": None,
+     "p_value": None, "significance_flag": "N/A"},
+])
+
 # ---------------------------------------------------------------------------
 # Sidebar navigation
 # ---------------------------------------------------------------------------
@@ -378,7 +392,7 @@ st.sidebar.markdown(
 )
 page = st.sidebar.radio(
     "Navigate",
-    ["Overview", "Race / Ethnicity Audit", "Geographic Audit", "Run New Audit", "About the Methodology"],
+    ["Overview", "Race / Ethnicity Audit", "Geographic Audit", "Gender Audit", "Run New Audit", "About the Methodology"],
     label_visibility="collapsed",
 )
 
@@ -396,6 +410,7 @@ st.sidebar.markdown(
 # ---------------------------------------------------------------------------
 st.session_state.setdefault("race_df", None)
 st.session_state.setdefault("geo_df", None)
+st.session_state.setdefault("gender_df", None)
 
 
 # ---------------------------------------------------------------------------
@@ -466,7 +481,7 @@ def compute_overview_stats():
     groups_compared = 0
     significant_count = 0
 
-    for df in (st.session_state["race_df"], st.session_state["geo_df"]):
+    for df in (st.session_state["race_df"], st.session_state["geo_df"], st.session_state["gender_df"]):
         if df is None or df["control_approval_rate"].isna().all():
             continue
         dims_loaded += 1
@@ -654,6 +669,33 @@ elif page == "Geographic Audit":
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
+# Gender page
+# ---------------------------------------------------------------------------
+elif page == "Gender Audit":
+    hero(
+        "AUDIT · GENDER",
+        "Gender Disparity Audit",
+        "Counterfactual name-swap audit on loan underwriting prompts, holding surname and "
+        "every financial field identical while only the first name's gender coding changes "
+        "(110 matched Male/Female pairs)."
+    )
+
+    df = load_data(
+        "Gender", SAMPLE_GENDER_DATA, key="gender_upload", session_key="gender_df",
+        demographic_attribute="gender",
+    )
+    render_bias_table_and_chart(df)
+
+    st.markdown('<div class="report-card">', unsafe_allow_html=True)
+    st.markdown("### Executive summary")
+    callout(
+        "Plain-language summary from Gemini will appear here once a gender-dimension "
+        "statistical report is loaded.",
+        kind="pending",
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
 # Run New Audit page (live demo placeholder)
 # ---------------------------------------------------------------------------
 elif page == "Run New Audit":
@@ -676,12 +718,20 @@ elif page == "Run New Audit":
             employment_length = st.text_input("Employment length", value="4 years")
             city = st.text_input("City / pincode (optional)", value="")
 
+        dimension = st.selectbox(
+            "Test dimension",
+            list(DIMENSION_CATALOGS.keys()),
+            help="Which attribute to swap between control and counterfactual - "
+                 "the applicant's name changes accordingly (e.g. a demographically-coded "
+                 "name for Race/Ethnicity, or a same-surname opposite-gender name for Gender).",
+        )
+        group_options = sorted({p["counterfactual_group"] for p in DIMENSION_CATALOGS[dimension]["pairs"]})
         compare_group = st.selectbox(
             "Test for disparity against",
-            COUNTERFACTUAL_GROUPS,
-            help="The name above is sent as-is (Control). A demographically-coded name from "
-                 "the selected group is substituted for the Counterfactual run - every other "
-                 "field (income, credit score, loan amount, employment, location) stays identical.",
+            group_options,
+            help="The name above is sent as-is (Control). A coded name from the selected group "
+                 "is substituted for the Counterfactual run - every other field (income, credit "
+                 "score, loan amount, employment, location) stays identical.",
         )
 
         log_to_bq = st.checkbox(
@@ -702,14 +752,15 @@ elif page == "Run New Audit":
             "employment_length": employment_length,
         }
 
-        # Pick a demographically-coded counterfactual name from the selected group,
+        # Pick a coded counterfactual name from the selected group/dimension,
         # keeping the user's entered name as the control.
-        group_templates = [p for p in DEMOGRAPHIC_NAME_PAIRS if p["counterfactual_group"] == compare_group]
+        catalog = DIMENSION_CATALOGS[dimension]
+        group_templates = [p for p in catalog["pairs"] if p["counterfactual_group"] == compare_group]
         template = group_templates[0]
         pair_id = f"live_{uuid.uuid4().hex[:8]}"
         name_pair = {
             "pair_id": pair_id,
-            "demographic_attribute": "race_ethnicity",
+            "demographic_attribute": catalog["attribute"],
             "control_name": name.strip() or template["control_name"],
             "control_group": "As entered",
             "counterfactual_name": template["counterfactual_name"],
@@ -787,7 +838,7 @@ elif page == "Run New Audit":
         # is uploaded - this keeps the "one statistical code path" guarantee.
         record = {
             "pair_id": pair_id,
-            "demographic_attribute": "race_ethnicity",
+            "demographic_attribute": catalog["attribute"],
             "control_applicant": pair["control"]["applicant_name"],
             "control_group": name_pair["control_group"],
             "control_decision": ctrl_decision,
@@ -800,15 +851,15 @@ elif page == "Run New Audit":
         st.markdown("### Scored through the audit pipeline (n=1 pair)")
         callout(
             "This runs the same statistical scorer used for batch audits, so the columns below "
-            "match the Race/Ethnicity page. With a single pair the p-value can't establish "
-            "significance - run a full batch (20+ pairs per group, via <code>run_audit.py</code> "
+            f"match the {dimension} page. With a single pair the p-value can't establish "
+            "significance - run a full batch (100+ pairs per group, via <code>run_audit.py</code> "
             "then upload the exported CSV) for a statistically powered read.",
             kind="pending",
         )
         try:
             metrics = calculate_group_metrics(
                 group_name=compare_group,
-                demographic_attribute="race_ethnicity",
+                demographic_attribute=catalog["attribute"],
                 pairs=[record],
             )
             st.dataframe(
@@ -835,8 +886,8 @@ elif page == "Run New Audit":
                         "p_value": metrics["p_value"],
                         "significance_flag": metrics["significance_flag"],
                     }])
-                    log_bias_metrics(metrics_row, run_id=run_id, demographic_attribute="race_ethnicity")
-                    cached_latest_bias_metrics.clear()  # so the Race/Ethnicity page picks this up immediately
+                    log_bias_metrics(metrics_row, run_id=run_id, demographic_attribute=catalog["attribute"])
+                    cached_latest_bias_metrics.clear()  # so the matching dashboard page picks this up immediately
                     callout(f"Saved to BigQuery as <code>{run_id}</code>.", kind="clear")
                 except Exception as e:
                     callout(f"Could not save to BigQuery: {e}", kind="flag")

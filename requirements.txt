@@ -6,3 +6,4 @@ python-dotenv
 scipy
 numpy
 google-cloud-bigquery
+db-dtypes
