@@ -1,0 +1,152 @@
+[
+  {
+    "pair_id": "location_pair_01",
+    "control": {
+      "pincode": 110095,
+      "officename": "Jhilmil HO",
+      "districtname": "SHAHDARA",
+      "statename": "Delhi"
+    },
+    "counterfactual": {
+      "pincode": 110077,
+      "officename": "Dhulsiras B.O",
+      "districtname": "SOUTH WEST DELHI",
+      "statename": "Delhi"
+    }
+  },
+  {
+    "pair_id": "location_pair_02",
+    "control": {
+      "pincode": 534260,
+      "officename": "Palakol H.O",
+      "districtname": "West Godavari",
+      "statename": "Andhra Pradesh"
+    },
+    "counterfactual": {
+      "pincode": 531162,
+      "officename": "BODAMETTAPALEM",
+      "districtname": "VISAKHAPATNAM",
+      "statename": "Andhra Pradesh"
+    }
+  },
+  {
+    "pair_id": "location_pair_03",
+    "control": {
+      "pincode": 754029,
+      "officename": "Athagarh H.O",
+      "districtname": "CUTTACK",
+      "statename": "Odisha"
+    },
+    "counterfactual": {
+      "pincode": 762022,
+      "officename": "Balumaha B.O",
+      "districtname": "KANDHAMAL",
+      "statename": "Odisha"
+    }
+  },
+  {
+    "pair_id": "location_pair_04",
+    "control": {
+      "pincode": 403001,
+      "officename": "Panaji H.O",
+      "districtname": "NORTH GOA",
+      "statename": "Goa"
+    },
+    "counterfactual": {
+      "pincode": 403523,
+      "officename": "Calvim B.O",
+      "districtname": "NORTH GOA",
+      "statename": "Goa"
+    }
+  },
+  {
+    "pair_id": "location_pair_05",
+    "control": {
+      "pincode": 734101,
+      "officename": "Darjeeling HO",
+      "districtname": "DARJILING",
+      "statename": "West Bengal"
+    },
+    "counterfactual": {
+      "pincode": 741150,
+      "officename": "Juranpur BO",
+      "districtname": "NADIA",
+      "statename": "West Bengal"
+    }
+  },
+  {
+    "pair_id": "location_pair_06",
+    "control": {
+      "pincode": 502001,
+      "officename": "Sangareddy H.O",
+      "districtname": "SANGAREDDY",
+      "statename": "Telangana"
+    },
+    "counterfactual": {
+      "pincode": 508377,
+      "officename": "Marepalli B.O",
+      "districtname": "NALGONDA",
+      "statename": "Telangana"
+    }
+  },
+  {
+    "pair_id": "location_pair_07",
+    "control": {
+      "pincode": 841428,
+      "officename": "Gopalganj HO",
+      "districtname": "GOPALGANJ",
+      "statename": "Bihar"
+    },
+    "counterfactual": {
+      "pincode": 844501,
+      "officename": "Hargovindpur BO",
+      "districtname": "VAISHALI",
+      "statename": "Bihar"
+    }
+  },
+  {
+    "pair_id": "location_pair_08",
+    "control": {
+      "pincode": 226001,
+      "officename": "Lucknow GPO",
+      "districtname": "LUCKNOW",
+      "statename": "Uttar Pradesh"
+    },
+    "counterfactual": {
+      "pincode": 262122,
+      "officename": "Sherpur BO",
+      "districtname": "PILIBHIT",
+      "statename": "Uttar Pradesh"
+    }
+  },
+  {
+    "pair_id": "location_pair_09",
+    "control": {
+      "pincode": 788151,
+      "officename": "Hailakandi H.O",
+      "districtname": "HAILAKANDI",
+      "statename": "Assam"
+    },
+    "counterfactual": {
+      "pincode": 788722,
+      "officename": "Dasgram B.O",
+      "districtname": "KARIMGANJ",
+      "statename": "Assam"
+    }
+  },
+  {
+    "pair_id": "location_pair_10",
+    "control": {
+      "pincode": 796001,
+      "officename": "Aizawl H.O",
+      "districtname": "Aizawl",
+      "statename": "Mizoram"
+    },
+    "counterfactual": {
+      "pincode": 796431,
+      "officename": "Khawhnai B.O",
+      "districtname": "Mammit",
+      "statename": "Mizoram"
+    }
+  }
+]

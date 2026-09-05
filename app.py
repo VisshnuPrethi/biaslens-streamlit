@@ -4,9 +4,106 @@ Streamlit front-end. Data connections are placeholders for now -
 wire up BigQuery / CSV loading where marked TODO.
 """
 
+import os
+import re
+import time
+import uuid
+
 import streamlit as st
 import pandas as pd
 import altair as alt
+
+# ---------------------------------------------------------------------------
+# Pipeline wiring - powers the "Run New Audit" live-test page.
+# Supports both a flat repo layout (modules alongside app.py) and a
+# `biaslens/` package layout (modules imported as biaslens.<module>).
+# ---------------------------------------------------------------------------
+try:
+    from pair_generator import create_loan_pair, build_loan_prompt, DEMOGRAPHIC_NAME_PAIRS
+except ImportError:
+    from biaslens.pair_generator import create_loan_pair, build_loan_prompt, DEMOGRAPHIC_NAME_PAIRS
+
+try:
+    from target_agent import query_gemini_agent
+except ImportError:
+    from biaslens.target_agent import query_gemini_agent
+
+try:
+    from scorer import calculate_group_metrics
+except ImportError:
+    from biaslens.scorer import calculate_group_metrics
+
+# Streamlit Cloud exposes secrets via st.secrets, not automatically as env
+# vars - bridge them so target_agent.py's os.environ.get(...) calls keep
+# working unchanged, whether running locally (.env) or deployed (secrets.toml).
+try:
+    for _key in ("GEMINI_API_KEY", "GEMINI_MODEL", "GCP_PROJECT_ID", "BQ_DATASET_ID", "BQ_TABLE_ID"):
+        if _key not in os.environ and _key in st.secrets:
+            os.environ[_key] = str(st.secrets[_key])
+except Exception:
+    pass  # no secrets.toml present (e.g. local run using .env) - fine, dotenv handles it
+
+COUNTERFACTUAL_GROUPS = sorted({p["counterfactual_group"] for p in DEMOGRAPHIC_NAME_PAIRS})
+
+
+def parse_decision(raw_response: str):
+    """Parse APPROVED/DENIED from a raw LLM underwriting response. Mirrors run_audit.py's parser
+    so a live single-pair test and a batch audit interpret responses identically."""
+    if not raw_response:
+        return None
+    match = re.search(r"decision\s*:\s*\[?\s*(approved|denied)\s*\]?", raw_response, re.IGNORECASE)
+    if match:
+        return match.group(1).upper()
+    first_lines = "\n".join(raw_response.strip().splitlines()[:4]).lower()
+    has_approved = "approved" in first_lines or "approval" in first_lines
+    has_denied = "denied" in first_lines or "denial" in first_lines or "rejected" in first_lines
+    if has_approved and not has_denied:
+        return "APPROVED"
+    if has_denied and not has_approved:
+        return "DENIED"
+    return None
+
+
+def extract_confidence(raw_response: str):
+    """Extract a 0.0-1.0 confidence score if present. Mirrors run_audit.py's parser."""
+    if not raw_response:
+        return None
+    match = re.search(
+        r"confidence\s*(?:score)?\s*:\s*\[?\s*([0-9]*\.?[0-9]+)\s*\]?",
+        raw_response,
+        re.IGNORECASE,
+    )
+    if match:
+        try:
+            val = float(match.group(1))
+            if 0.0 <= val <= 1.0:
+                return val
+        except ValueError:
+            pass
+    return None
+
+
+def query_with_retry(prompt: str, max_retries: int = 3) -> str:
+    """Query the target agent with basic backoff on rate-limit / server errors."""
+    last_err = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            return query_gemini_agent(prompt)
+        except ValueError:
+            raise  # missing GEMINI_API_KEY - retrying won't help
+        except Exception as e:
+            last_err = e
+            err_msg = str(e)
+            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
+                time.sleep(5 * attempt)
+            elif "503" in err_msg or "UNAVAILABLE" in err_msg:
+                time.sleep(3 * attempt)
+            elif attempt == max_retries:
+                raise
+            else:
+                time.sleep(2 * attempt)
+    raise last_err
+
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -510,7 +607,8 @@ elif page == "Run New Audit":
     hero(
         "LIVE TEST",
         "Run a New Audit",
-        "Enter a single applicant profile to test against the target agent."
+        "Enter a single applicant profile to test against the target agent, live - "
+        "the same applicant is sent twice, identical except for the applicant's name."
     )
 
     st.markdown('<div class="report-card">', unsafe_allow_html=True)
@@ -525,28 +623,153 @@ elif page == "Run New Audit":
             employment_length = st.text_input("Employment length", value="4 years")
             city = st.text_input("City / pincode (optional)", value="")
 
+        compare_group = st.selectbox(
+            "Test for disparity against",
+            COUNTERFACTUAL_GROUPS,
+            help="The name above is sent as-is (Control). A demographically-coded name from "
+                 "the selected group is substituted for the Counterfactual run - every other "
+                 "field (income, credit score, loan amount, employment, location) stays identical.",
+        )
+
         submitted = st.form_submit_button("Run audit")
     st.markdown('</div>', unsafe_allow_html=True)
 
     if submitted:
+        base_application = {
+            "income": income,
+            "credit_score": credit_score,
+            "loan_amount": loan_amount,
+            "employment_length": employment_length,
+        }
+
+        # Pick a demographically-coded counterfactual name from the selected group,
+        # keeping the user's entered name as the control.
+        group_templates = [p for p in DEMOGRAPHIC_NAME_PAIRS if p["counterfactual_group"] == compare_group]
+        template = group_templates[0]
+        pair_id = f"live_{uuid.uuid4().hex[:8]}"
+        name_pair = {
+            "pair_id": pair_id,
+            "demographic_attribute": "race_ethnicity",
+            "control_name": name.strip() or template["control_name"],
+            "control_group": "As entered",
+            "counterfactual_name": template["counterfactual_name"],
+            "counterfactual_group": compare_group,
+        }
+        pair = create_loan_pair(pair_id=pair_id, base_application=base_application, name_pair=name_pair)
+
+        if city.strip():
+            pair["control"]["city"] = city.strip()
+            pair["counterfactual"]["city"] = city.strip()
+            pair["control"]["prompt"] = build_loan_prompt(pair["control"])
+            pair["counterfactual"]["prompt"] = build_loan_prompt(pair["counterfactual"])
+
+        try:
+            with st.spinner(f"Querying target agent for {pair['control']['applicant_name']} (control)..."):
+                ctrl_raw = query_with_retry(pair["control"]["prompt"])
+            with st.spinner(f"Querying target agent for {pair['counterfactual']['applicant_name']} (counterfactual)..."):
+                cf_raw = query_with_retry(pair["counterfactual"]["prompt"])
+        except ValueError as e:
+            st.markdown('<div class="report-card">', unsafe_allow_html=True)
+            callout(
+                f"Configuration error: {e}. Set <code>GEMINI_API_KEY</code> in your environment "
+                f"(local .env) or in Streamlit secrets (deployed app) and rerun.",
+                kind="flag",
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.stop()
+        except Exception as e:
+            st.markdown('<div class="report-card">', unsafe_allow_html=True)
+            callout(f"The target agent call failed: {e}", kind="flag")
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.stop()
+
+        ctrl_decision = parse_decision(ctrl_raw)
+        ctrl_conf = extract_confidence(ctrl_raw)
+        cf_decision = parse_decision(cf_raw)
+        cf_conf = extract_confidence(cf_raw)
+        both_parsed = ctrl_decision is not None and cf_decision is not None
+        is_match = both_parsed and ctrl_decision == cf_decision
+
+        st.markdown('<div class="report-card">', unsafe_allow_html=True)
+        st.markdown("### Result")
+        if both_parsed:
+            callout(
+                f"Decisions <b>{'matched' if is_match else 'differed'}</b> between control and counterfactual.",
+                kind="clear" if is_match else "flag",
+            )
+        else:
+            callout(
+                "Could not confidently parse a decision from one or both responses - see raw output below.",
+                kind="pending",
+            )
+
+        rcol1, rcol2 = st.columns(2)
+        with rcol1:
+            st.markdown(f"**Control — {pair['control']['applicant_name']}**")
+            st.markdown(
+                f"Decision: `{ctrl_decision or 'UNPARSED'}`  ·  "
+                f"Confidence: `{ctrl_conf if ctrl_conf is not None else 'N/A'}`"
+            )
+            with st.expander("Raw response"):
+                st.text(ctrl_raw)
+        with rcol2:
+            st.markdown(f"**Counterfactual — {pair['counterfactual']['applicant_name']}** ({compare_group})")
+            st.markdown(
+                f"Decision: `{cf_decision or 'UNPARSED'}`  ·  "
+                f"Confidence: `{cf_conf if cf_conf is not None else 'N/A'}`"
+            )
+            with st.expander("Raw response"):
+                st.text(cf_raw)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # Score through the identical scorer.py used for batch audits, so the
+        # fields below match what the Race/Ethnicity page shows once a full CSV
+        # is uploaded - this keeps the "one statistical code path" guarantee.
+        record = {
+            "pair_id": pair_id,
+            "demographic_attribute": "race_ethnicity",
+            "control_applicant": pair["control"]["applicant_name"],
+            "control_group": name_pair["control_group"],
+            "control_decision": ctrl_decision,
+            "counterfactual_applicant": pair["counterfactual"]["applicant_name"],
+            "counterfactual_group": compare_group,
+            "counterfactual_decision": cf_decision,
+            "decision_match": is_match,
+        }
+        st.markdown('<div class="report-card">', unsafe_allow_html=True)
+        st.markdown("### Scored through the audit pipeline (n=1 pair)")
         callout(
-            "This is a UI placeholder - connect this form to "
-            "<code>pair_generator.py</code> → <code>target_agent.py</code> → "
-            "<code>scorer.py</code> to run a live counterfactual test.",
+            "This runs the same statistical scorer used for batch audits, so the columns below "
+            "match the Race/Ethnicity page. With a single pair the p-value can't establish "
+            "significance - run a full batch (20+ pairs per group, via <code>run_audit.py</code> "
+            "then upload the exported CSV) for a statistically powered read.",
             kind="pending",
         )
-        st.markdown('<div class="report-card">', unsafe_allow_html=True)
-        st.markdown("### Submitted profile")
-        st.code(
-            f"Applicant:         {name}\n"
-            f"Income:            ${income:,}\n"
-            f"Credit score:      {credit_score}\n"
-            f"Loan amount:       ${loan_amount:,}\n"
-            f"Employment length: {employment_length}\n"
-            f"Location:          {city or 'Not specified'}",
-            language="text",
-        )
+        try:
+            metrics = calculate_group_metrics(
+                group_name=compare_group,
+                demographic_attribute="race_ethnicity",
+                pairs=[record],
+            )
+            st.dataframe(
+                pd.DataFrame([{
+                    "group_name": metrics["group_name"],
+                    "control_approval_rate": metrics["control_approval_rate_pct"],
+                    "counterfactual_approval_rate": metrics["counterfactual_approval_rate_pct"],
+                    "disparity_pp": metrics["disparity_percentage_points"],
+                    "p_value": metrics["p_value"],
+                    "significance_flag": metrics["significance_flag"],
+                }]),
+                use_container_width=True,
+                hide_index=True,
+            )
+        except Exception as e:
+            callout(f"Scorer step could not run: {e}", kind="flag")
         st.markdown('</div>', unsafe_allow_html=True)
+
+        with st.expander("Prompts sent to the target agent"):
+            st.code(pair["control"]["prompt"], language="text")
+            st.code(pair["counterfactual"]["prompt"], language="text")
 
 # ---------------------------------------------------------------------------
 # Methodology page

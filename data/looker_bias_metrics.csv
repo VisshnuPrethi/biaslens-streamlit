@@ -1,0 +1,6 @@
+group_name,control_approval_rate,counterfactual_approval_rate,disparity_pp,p_value,significance_flag
+African American,100.0,100.0,0.0,1.0,NOT SIGNIFICANT (p >= 0.05)
+Hispanic/Latino,90.0,100.0,10.0,0.4872,NOT SIGNIFICANT (p >= 0.05)
+South Asian,100.0,95.0,-5.0,1.0,NOT SIGNIFICANT (p >= 0.05)
+East Asian,100.0,95.0,-5.0,1.0,NOT SIGNIFICANT (p >= 0.05)
+race_ethnicity (Overall),97.5,97.5,0.0,1.0,NOT SIGNIFICANT (p >= 0.05)

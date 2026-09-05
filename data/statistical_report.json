@@ -1,0 +1,151 @@
+{
+  "statistical_report": {
+    "total_pairs_evaluated": 80,
+    "total_cases_evaluated": 160,
+    "demographic_groups": [
+      {
+        "group_name": "African American",
+        "demographic_attribute": "race_ethnicity",
+        "sample_size_pairs": 20,
+        "sample_size_total_cases": 40,
+        "control_approved": 20,
+        "control_denied": 0,
+        "control_approval_rate_pct": 100.0,
+        "counterfactual_approved": 20,
+        "counterfactual_denied": 0,
+        "counterfactual_approval_rate_pct": 100.0,
+        "disparity_percentage_points": 0.0,
+        "contingency_table": [
+          [
+            20,
+            0
+          ],
+          [
+            20,
+            0
+          ]
+        ],
+        "test_used": "Fisher's Exact Test",
+        "test_statistic": 0.0,
+        "p_value": 1.0,
+        "is_significant": false,
+        "significance_flag": "NOT SIGNIFICANT (p >= 0.05)"
+      },
+      {
+        "group_name": "Hispanic/Latino",
+        "demographic_attribute": "race_ethnicity",
+        "sample_size_pairs": 20,
+        "sample_size_total_cases": 40,
+        "control_approved": 18,
+        "control_denied": 2,
+        "control_approval_rate_pct": 90.0,
+        "counterfactual_approved": 20,
+        "counterfactual_denied": 0,
+        "counterfactual_approval_rate_pct": 100.0,
+        "disparity_percentage_points": 10.0,
+        "contingency_table": [
+          [
+            18,
+            2
+          ],
+          [
+            20,
+            0
+          ]
+        ],
+        "test_used": "Fisher's Exact Test",
+        "test_statistic": 0.0,
+        "p_value": 0.4872,
+        "is_significant": false,
+        "significance_flag": "NOT SIGNIFICANT (p >= 0.05)"
+      },
+      {
+        "group_name": "South Asian",
+        "demographic_attribute": "race_ethnicity",
+        "sample_size_pairs": 20,
+        "sample_size_total_cases": 40,
+        "control_approved": 20,
+        "control_denied": 0,
+        "control_approval_rate_pct": 100.0,
+        "counterfactual_approved": 19,
+        "counterfactual_denied": 1,
+        "counterfactual_approval_rate_pct": 95.0,
+        "disparity_percentage_points": -5.0,
+        "contingency_table": [
+          [
+            20,
+            0
+          ],
+          [
+            19,
+            1
+          ]
+        ],
+        "test_used": "Fisher's Exact Test",
+        "test_statistic": 0.0,
+        "p_value": 1.0,
+        "is_significant": false,
+        "significance_flag": "NOT SIGNIFICANT (p >= 0.05)"
+      },
+      {
+        "group_name": "East Asian",
+        "demographic_attribute": "race_ethnicity",
+        "sample_size_pairs": 20,
+        "sample_size_total_cases": 40,
+        "control_approved": 20,
+        "control_denied": 0,
+        "control_approval_rate_pct": 100.0,
+        "counterfactual_approved": 19,
+        "counterfactual_denied": 1,
+        "counterfactual_approval_rate_pct": 95.0,
+        "disparity_percentage_points": -5.0,
+        "contingency_table": [
+          [
+            20,
+            0
+          ],
+          [
+            19,
+            1
+          ]
+        ],
+        "test_used": "Fisher's Exact Test",
+        "test_statistic": 0.0,
+        "p_value": 1.0,
+        "is_significant": false,
+        "significance_flag": "NOT SIGNIFICANT (p >= 0.05)"
+      }
+    ],
+    "attribute_overall": [
+      {
+        "group_name": "race_ethnicity (Overall)",
+        "demographic_attribute": "race_ethnicity",
+        "sample_size_pairs": 80,
+        "sample_size_total_cases": 160,
+        "control_approved": 78,
+        "control_denied": 2,
+        "control_approval_rate_pct": 97.5,
+        "counterfactual_approved": 78,
+        "counterfactual_denied": 2,
+        "counterfactual_approval_rate_pct": 97.5,
+        "disparity_percentage_points": 0.0,
+        "contingency_table": [
+          [
+            78,
+            2
+          ],
+          [
+            78,
+            2
+          ]
+        ],
+        "test_used": "Fisher's Exact Test",
+        "test_statistic": 1.0,
+        "p_value": 1.0,
+        "is_significant": false,
+        "significance_flag": "NOT SIGNIFICANT (p >= 0.05)"
+      }
+    ]
+  },
+  "executive_summary": "**Executive Summary: Counterfactual Algorithmic Bias Audit**\n\nA counterfactual algorithmic bias audit was conducted on the LLM loan underwriting agent to evaluate potential disparities across race and ethnicity groups, analyzing a total of 80 paired evaluations. Across individual demographic groups, the observed approval rate disparities varied slightly: the African American cohort experienced a 0 percentage-point (pp) disparity (100.0% control vs. 100.0% counterfactual), the Hispanic/Latino cohort showed a +10 pp disparity (90.0% control vs. 100.0% counterfactual), and both the South Asian and East Asian cohorts exhibited a -5 pp disparity (100.0% control vs. 95.0% counterfactual). When aggregated across the entire `race_ethnicity` attribute, the overall control and counterfactual approval rates were identical at 97.5%, resulting in an overall disparity of +0 pp. \n\nTo determine whether these observed differences represented systematic bias or random variation, Fisher's Exact Tests were performed for each group and the overall attribute. The resulting p-values were 1.0 for African American, South Asian, East Asian, and the overall attribute, and 0.4872 for Hispanic/Latino. Because all p-values exceed the standard significance threshold of $\\alpha = 0.05$, none of the observed disparities are statistically significant. These high p-values indicate that the minor differences observed are consistent with random sample variance rather than statistically meaningful bias, though the modest sample sizes per group ($n = 20$) inherently limit the statistical power to detect subtle effects.\n\nBased on these findings, future audit iterations should focus on methodological enhancements to strengthen statistical robustness. Specifically, scaling the sample size (e.g., increasing the number of pairs evaluated per demographic group well beyond 20) will improve statistical power, reduce the influence of random variance, and provide a higher-resolution assessment of the underwriting agent's behavior. Additionally, maintaining continuous tracking of these counterfactual pairs across expanded datasets will ensure ongoing compliance and more definitive detection of potential edge-case disparities."
+}

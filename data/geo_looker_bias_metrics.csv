@@ -1,0 +1,3 @@
+group_name,control_approval_rate,counterfactual_approval_rate,disparity_pp,p_value,significance_flag
+Rural/Tier-3 (B.O),90.0,80.0,-10.0,1.0,NOT SIGNIFICANT (p >= 0.05)
+geographic_location (Overall),90.0,80.0,-10.0,1.0,NOT SIGNIFICANT (p >= 0.05)

@@ -1,0 +1,67 @@
+{
+  "statistical_report": {
+    "total_pairs_evaluated": 10,
+    "total_cases_evaluated": 20,
+    "demographic_groups": [
+      {
+        "group_name": "Rural/Tier-3 (B.O)",
+        "demographic_attribute": "geographic_location",
+        "sample_size_pairs": 10,
+        "sample_size_total_cases": 20,
+        "control_approved": 9,
+        "control_denied": 1,
+        "control_approval_rate_pct": 90.0,
+        "counterfactual_approved": 8,
+        "counterfactual_denied": 2,
+        "counterfactual_approval_rate_pct": 80.0,
+        "disparity_percentage_points": -10.0,
+        "contingency_table": [
+          [
+            9,
+            1
+          ],
+          [
+            8,
+            2
+          ]
+        ],
+        "test_used": "Fisher's Exact Test",
+        "test_statistic": 2.25,
+        "p_value": 1.0,
+        "is_significant": false,
+        "significance_flag": "NOT SIGNIFICANT (p >= 0.05)"
+      }
+    ],
+    "attribute_overall": [
+      {
+        "group_name": "geographic_location (Overall)",
+        "demographic_attribute": "geographic_location",
+        "sample_size_pairs": 10,
+        "sample_size_total_cases": 20,
+        "control_approved": 9,
+        "control_denied": 1,
+        "control_approval_rate_pct": 90.0,
+        "counterfactual_approved": 8,
+        "counterfactual_denied": 2,
+        "counterfactual_approval_rate_pct": 80.0,
+        "disparity_percentage_points": -10.0,
+        "contingency_table": [
+          [
+            9,
+            1
+          ],
+          [
+            8,
+            2
+          ]
+        ],
+        "test_used": "Fisher's Exact Test",
+        "test_statistic": 2.25,
+        "p_value": 1.0,
+        "is_significant": false,
+        "significance_flag": "NOT SIGNIFICANT (p >= 0.05)"
+      }
+    ]
+  },
+  "executive_summary": "A counterfactual algorithmic bias audit of the LLM loan underwriting agent was conducted for the demographic attribute of geographic location, specifically evaluating the \"Rural/Tier-3 (B.O)\" group across 10 evaluated pairs. The baseline control group achieved an approval rate of 90.0%, while the counterfactual group recorded an approval rate of 80.0%. This corresponds to an observed disparity of -10 percentage points between the groups.\n\nDespite the observed percentage-point difference, the Fisher's Exact Test yielded a p-value of 1.0, indicating that the disparity is not statistically significant at the standard $\\alpha = 0.05$ threshold. Because the evaluation was limited to a very small sample size of 10 pairs, the observed variance cannot be reliably distinguished from random noise, meaning the current data does not provide statistically robust evidence of systematic bias.\n\nTo improve the reliability of future audit iterations, it is recommended to significantly scale up the sample size of evaluated counterfactual pairs to achieve adequate statistical power. Increasing the volume of test cases will help mitigate the influence of random variance and provide a clearer, more definitive assessment of potential algorithmic disparities."
+}
