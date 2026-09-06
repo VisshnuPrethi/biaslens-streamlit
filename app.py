@@ -38,6 +38,8 @@ try:
         log_evaluation_results,
         log_bias_metrics,
         load_latest_bias_metrics,
+        load_metrics_history,
+        detect_drift,
         new_run_id,
     )
 except ImportError:
@@ -45,6 +47,8 @@ except ImportError:
         log_evaluation_results,
         log_bias_metrics,
         load_latest_bias_metrics,
+        load_metrics_history,
+        detect_drift,
         new_run_id,
     )
 
@@ -53,6 +57,16 @@ except ImportError:
 def cached_latest_bias_metrics(demographic_attribute: str):
     """Cache BigQuery reads for 5 minutes so page navigation doesn't re-query on every rerun."""
     return load_latest_bias_metrics(demographic_attribute)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_metrics_history(demographic_attribute: str):
+    return load_metrics_history(demographic_attribute)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_detect_drift(demographic_attribute: str, threshold_pp: float = 5.0):
+    return detect_drift(demographic_attribute, threshold_pp=threshold_pp)
 
 # Streamlit Cloud exposes secrets via st.secrets, not automatically as env
 # vars - bridge them so target_agent.py's os.environ.get(...) calls keep
@@ -392,7 +406,7 @@ st.sidebar.markdown(
 )
 page = st.sidebar.radio(
     "Navigate",
-    ["Overview", "Race / Ethnicity Audit", "Geographic Audit", "Gender Audit", "Run New Audit", "About the Methodology"],
+    ["Overview", "Race / Ethnicity Audit", "Geographic Audit", "Gender Audit", "Drift Tracking", "Run New Audit", "About the Methodology"],
     label_visibility="collapsed",
 )
 
@@ -696,6 +710,107 @@ elif page == "Gender Audit":
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
+# Drift Tracking page
+# ---------------------------------------------------------------------------
+elif page == "Drift Tracking":
+    hero(
+        "PHASE 2 · CONTINUOUS MONITORING",
+        "Bias Drift Tracking",
+        "Every audit run is tagged with a run_id, timestamp, and model version - this page "
+        "shows how disparity has moved across runs, so a regression after a model swap is "
+        "visible as a trend, not just a snapshot."
+    )
+
+    DIMENSION_ATTRIBUTES = {
+        "Race / Ethnicity": "race_ethnicity",
+        "Geographic": "geographic_location",
+        "Gender": "gender",
+    }
+    drift_dimension = st.selectbox("Dimension", list(DIMENSION_ATTRIBUTES.keys()))
+    attribute = DIMENSION_ATTRIBUTES[drift_dimension]
+
+    history = cached_metrics_history(attribute)
+
+    if history is None:
+        st.markdown('<div class="report-card">', unsafe_allow_html=True)
+        callout(
+            f"No run history yet for {drift_dimension.lower()}. Run "
+            f"<code>run_audit.py --push-to-bq</code> at least twice (ideally after a model "
+            f"or prompt change) to see a trend here.",
+            kind="pending",
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        n_runs = history["run_id"].nunique()
+
+        # Basic drift alerting - flag any group whose disparity moved a lot
+        # since the immediately preceding run.
+        alerts = cached_detect_drift(attribute, threshold_pp=5.0)
+        if alerts:
+            flagged = [a for a in alerts if a["flagged"]]
+            st.markdown('<div class="report-card">', unsafe_allow_html=True)
+            st.markdown("### Latest vs. previous run")
+            if flagged:
+                for a in flagged:
+                    direction = "increased" if a["delta_pp"] > 0 else "decreased"
+                    version_note = ""
+                    if a["previous_model_version"] != a["latest_model_version"]:
+                        version_note = (
+                            f" (model changed: <code>{a['previous_model_version']}</code> → "
+                            f"<code>{a['latest_model_version']}</code>)"
+                        )
+                    callout(
+                        f"<b>{a['group_name']}</b>: disparity {direction} by "
+                        f"{abs(a['delta_pp']):.1f}pp since the last run "
+                        f"({a['previous_disparity_pp']:.1f} → {a['latest_disparity_pp']:.1f})"
+                        f"{version_note} - worth investigating.",
+                        kind="flag",
+                    )
+            else:
+                callout(
+                    f"No group moved more than 5.0pp since the previous run - "
+                    f"stable across the last two runs.",
+                    kind="clear",
+                )
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="report-card">', unsafe_allow_html=True)
+        st.markdown(f"### Disparity over time ({n_runs} runs)")
+        chart = (
+            alt.Chart(history)
+            .mark_line(point=True)
+            .encode(
+                x=alt.X("run_timestamp:T", title="Run"),
+                y=alt.Y("disparity_pp:Q", title="Disparity (percentage points)"),
+                color=alt.Color(
+                    "group_name:N",
+                    title="Group",
+                    scale=alt.Scale(scheme="tableau10"),
+                ),
+                tooltip=["group_name", "run_id", "model_version", "disparity_pp", "p_value", "significance_flag"],
+            )
+            .properties(height=320)
+            .configure_view(strokeWidth=0)
+            .configure_axis(grid=False)
+        )
+        st.altair_chart(chart, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="report-card">', unsafe_allow_html=True)
+        st.markdown("### Run history")
+        display_cols = [c for c in [
+            "run_timestamp", "run_id", "model_version", "group_name",
+            "control_approval_rate", "counterfactual_approval_rate",
+            "disparity_pp", "p_value", "significance_flag",
+        ] if c in history.columns]
+        st.dataframe(
+            history[display_cols].sort_values("run_timestamp", ascending=False),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
 # Run New Audit page (live demo placeholder)
 # ---------------------------------------------------------------------------
 elif page == "Run New Audit":
@@ -888,6 +1003,8 @@ elif page == "Run New Audit":
                     }])
                     log_bias_metrics(metrics_row, run_id=run_id, demographic_attribute=catalog["attribute"])
                     cached_latest_bias_metrics.clear()  # so the matching dashboard page picks this up immediately
+                    cached_metrics_history.clear()
+                    cached_detect_drift.clear()
                     callout(f"Saved to BigQuery as <code>{run_id}</code>.", kind="clear")
                 except Exception as e:
                     callout(f"Could not save to BigQuery: {e}", kind="flag")

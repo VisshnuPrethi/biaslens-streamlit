@@ -136,6 +136,7 @@ def run_audit(
     delay_between_calls: float = 1.0,
     use_cache: bool = True,
     push_to_bq: bool = False,
+    model_version: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Execute bias audit across control and counterfactual pairs.
@@ -145,8 +146,12 @@ def run_audit(
     :param delay_between_calls: Seconds to pause between Gemini API calls to respect rate limits.
     :param use_cache: If True, reuse already evaluated pairs from output_file if present.
     :param push_to_bq: If True, log raw pairs + scored metrics to BigQuery after the run.
+    :param model_version: Tag stored alongside the run in BigQuery, so drift tracking can
+        attribute a change in disparity to a specific model swap. Defaults to the
+        GEMINI_MODEL env var if not given.
     :return: List of evaluated pair dictionaries.
     """
+    model_version = model_version or os.environ.get("GEMINI_MODEL", "unknown")
     # 1. Load pairs from disk (or generate fresh if missing)
     if not os.path.exists(pairs_file):
         print(f"Pairs file '{pairs_file}' not found. Generating fresh test pairs...", flush=True)
@@ -253,8 +258,8 @@ def run_audit(
     # the CLI run if BigQuery isn't reachable.
     if push_to_bq:
         try:
-            run_id = log_evaluation_results(results)
-            print(f"BigQuery: logged {len(results)} pairs to audit_results (run_id={run_id}).", flush=True)
+            run_id = log_evaluation_results(results, model_version=model_version)
+            print(f"BigQuery: logged {len(results)} pairs to audit_results (run_id={run_id}, model={model_version}).", flush=True)
 
             demographic_attribute = results[0].get("demographic_attribute", "race_ethnicity")
             summary_report = calculate_disparate_impact(results)
@@ -264,6 +269,7 @@ def run_audit(
                 save_to_bq=True,
                 run_id=run_id,
                 demographic_attribute=demographic_attribute,
+                model_version=model_version,
             )
             print(f"BigQuery: logged scored metrics to bias_metrics (run_id={run_id}).", flush=True)
         except Exception as e:
@@ -338,6 +344,11 @@ if __name__ == "__main__":
     parser.add_argument("--delay", type=float, default=1.0, help="Delay between API calls in seconds.")
     parser.add_argument("--no-cache", action="store_true", help="Disable cache and re-evaluate all pairs.")
     parser.add_argument("--push-to-bq", action="store_true", help="Log results and scored metrics to BigQuery.")
+    parser.add_argument(
+        "--model-version", default=None,
+        help="Tag for this run's model version, stored in BigQuery for drift tracking. "
+             "Defaults to the GEMINI_MODEL env var (e.g. 'gemini-flash-lite-latest').",
+    )
     args = parser.parse_args()
 
     run_audit(
@@ -346,4 +357,5 @@ if __name__ == "__main__":
         delay_between_calls=args.delay,
         use_cache=not args.no_cache,
         push_to_bq=args.push_to_bq,
+        model_version=args.model_version,
     )

@@ -206,6 +206,7 @@ def export_looker_table(
     save_to_bq: bool = False,
     run_id: Optional[str] = None,
     demographic_attribute: str = "race_ethnicity",
+    model_version: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Format statistical metrics into a flattened Looker Studio-ready table with the exact columns:
@@ -272,7 +273,7 @@ def export_looker_table(
             except ImportError:
                 from biaslens.bq_logger import log_bias_metrics, new_run_id
             run_id = run_id or new_run_id()
-            log_bias_metrics(df, run_id=run_id, demographic_attribute=demographic_attribute)
+            log_bias_metrics(df, run_id=run_id, demographic_attribute=demographic_attribute, model_version=model_version)
             print(f"BigQuery bias_metrics table updated successfully (run_id={run_id}).")
         except Exception as e:
             print(f"[BigQuery Notice] Could not upload directly to BigQuery ({e}). CSV is available for Looker connection.")
