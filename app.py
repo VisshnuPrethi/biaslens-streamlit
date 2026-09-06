@@ -29,9 +29,9 @@ except ImportError:
     from biaslens.target_agent import query_gemini_agent
 
 try:
-    from scorer import calculate_group_metrics
+    from scorer import calculate_group_metrics, generate_drift_explanation
 except ImportError:
-    from biaslens.scorer import calculate_group_metrics
+    from biaslens.scorer import calculate_group_metrics, generate_drift_explanation
 
 try:
     from bq_logger import (
@@ -40,6 +40,7 @@ try:
         load_latest_bias_metrics,
         load_metrics_history,
         detect_drift,
+        diagnose_alert,
         new_run_id,
     )
 except ImportError:
@@ -49,6 +50,7 @@ except ImportError:
         load_latest_bias_metrics,
         load_metrics_history,
         detect_drift,
+        diagnose_alert,
         new_run_id,
     )
 
@@ -744,28 +746,38 @@ elif page == "Drift Tracking":
         n_runs = history["run_id"].nunique()
 
         # Basic drift alerting - flag any group whose disparity moved a lot
-        # since the immediately preceding run.
+        # since the immediately preceding run, then diagnose why (pure code,
+        # comparing model_version / prompt_hash between the two runs).
         alerts = cached_detect_drift(attribute, threshold_pp=5.0)
         if alerts:
-            flagged = [a for a in alerts if a["flagged"]]
+            flagged = [diagnose_alert(a) for a in alerts if a["flagged"]]
             st.markdown('<div class="report-card">', unsafe_allow_html=True)
             st.markdown("### Latest vs. previous run")
             if flagged:
                 for a in flagged:
                     direction = "increased" if a["delta_pp"] > 0 else "decreased"
-                    version_note = ""
-                    if a["previous_model_version"] != a["latest_model_version"]:
-                        version_note = (
-                            f" (model changed: <code>{a['previous_model_version']}</code> → "
-                            f"<code>{a['latest_model_version']}</code>)"
-                        )
+                    cause_kind = "flag" if a["cause"] != "unexplained" else "pending"
                     callout(
                         f"<b>{a['group_name']}</b>: disparity {direction} by "
                         f"{abs(a['delta_pp']):.1f}pp since the last run "
-                        f"({a['previous_disparity_pp']:.1f} → {a['latest_disparity_pp']:.1f})"
-                        f"{version_note} - worth investigating.",
-                        kind="flag",
+                        f"({a['previous_disparity_pp']:.1f} → {a['latest_disparity_pp']:.1f}). "
+                        f"<b>Likely cause: {a['label']}.</b>"
+                        + (
+                            f" (<code>{a['previous_model_version']}</code> → <code>{a['latest_model_version']}</code>)"
+                            if a["model_changed"] else ""
+                        ),
+                        kind=cause_kind,
                     )
+                    group_key = f"{attribute}_{a['group_name']}_{a['latest_run_id']}".replace(" ", "_")
+                    explanation_key = f"drift_explanation_{group_key}"
+                    if st.button(f"Explain with Gemini - {a['group_name']}", key=f"explain_btn_{group_key}"):
+                        with st.spinner("Asking Gemini to write up this finding..."):
+                            try:
+                                st.session_state[explanation_key] = generate_drift_explanation(a)
+                            except Exception as e:
+                                st.session_state[explanation_key] = f"Could not generate explanation: {e}"
+                    if explanation_key in st.session_state:
+                        st.markdown(f"> {st.session_state[explanation_key]}")
             else:
                 callout(
                     f"No group moved more than 5.0pp since the previous run - "

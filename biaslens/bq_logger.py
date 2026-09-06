@@ -72,6 +72,7 @@ def log_evaluation_results(
     results: List[Dict[str, Any]],
     run_id: Optional[str] = None,
     model_version: Optional[str] = None,
+    prompt_hash: Optional[str] = None,
 ) -> str:
     """
     Append per-pair evaluation results (control vs counterfactual decisions)
@@ -84,6 +85,7 @@ def log_evaluation_results(
     run_id = run_id or new_run_id()
     run_timestamp = datetime.now(timezone.utc).isoformat()
     model_version = model_version or os.environ.get("GEMINI_MODEL", "unknown")
+    prompt_hash = prompt_hash or "unknown"
 
     rows = []
     for r in results:
@@ -91,6 +93,7 @@ def log_evaluation_results(
             "run_id": run_id,
             "run_timestamp": run_timestamp,
             "model_version": model_version,
+            "prompt_hash": prompt_hash,
             "pair_id": r.get("pair_id"),
             "demographic_attribute": r.get("demographic_attribute"),
             "control_applicant": r.get("control_applicant"),
@@ -117,21 +120,25 @@ def log_bias_metrics(
     run_id: str,
     demographic_attribute: str,
     model_version: Optional[str] = None,
+    prompt_hash: Optional[str] = None,
 ) -> None:
     """
     Append a scored metrics table (one row per demographic group, matching
     scorer.export_looker_table's columns) to the BigQuery bias_metrics table,
-    tagged with run_id / run_timestamp / demographic_attribute / model_version -
-    the model_version tag is what lets the Drift page attribute a change in
-    disparity to a specific model swap rather than just "some run".
+    tagged with run_id / run_timestamp / demographic_attribute / model_version /
+    prompt_hash - these two tags are what let root-cause analysis tell "the
+    model changed" apart from "the prompt changed" apart from "neither -
+    unexplained" when Drift Tracking flags a disparity jump.
     """
     model_version = model_version or os.environ.get("GEMINI_MODEL", "unknown")
+    prompt_hash = prompt_hash or "unknown"
 
     df = metrics_df.copy()
     df.insert(0, "run_id", run_id)
     df.insert(1, "run_timestamp", pd.Timestamp.now(tz="UTC"))
     df.insert(2, "demographic_attribute", demographic_attribute)
     df.insert(3, "model_version", model_version)
+    df.insert(4, "prompt_hash", prompt_hash)
 
     client = get_bq_client()
     table_ref = f"{client.project}.{_dataset_id()}.{_metrics_table_id()}"
@@ -152,7 +159,8 @@ def load_latest_bias_metrics(demographic_attribute: str) -> Optional[pd.DataFram
         table_ref = f"{client.project}.{_dataset_id()}.{_metrics_table_id()}"
         query = f"""
             SELECT group_name, control_approval_rate, counterfactual_approval_rate,
-                   disparity_pp, p_value, significance_flag, run_id, run_timestamp, model_version
+                   disparity_pp, p_value, significance_flag, run_id, run_timestamp,
+                   model_version, prompt_hash
             FROM `{table_ref}`
             WHERE demographic_attribute = @attr
               AND run_id = (
@@ -239,6 +247,42 @@ def detect_drift(demographic_attribute: str, threshold_pp: float = 5.0) -> Optio
             "delta_pp": delta,
             "previous_model_version": previous.loc[group_name].get("model_version"),
             "latest_model_version": latest.loc[group_name].get("model_version"),
+            "previous_prompt_hash": previous.loc[group_name].get("prompt_hash"),
+            "latest_prompt_hash": latest.loc[group_name].get("prompt_hash"),
             "flagged": abs(delta) >= threshold_pp,
         })
     return alerts
+
+
+def diagnose_alert(alert: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Deterministic root-cause diagnosis for one drift alert (from detect_drift).
+    Compares what actually changed between the two runs being compared -
+    model_version and/or prompt_hash - and returns a label plus the supporting
+    facts. This is pure code, no LLM judgment: Gemini is only used afterward
+    to turn this into a plain-language paragraph (see scorer.generate_drift_explanation),
+    never to decide the cause itself.
+    """
+    model_changed = alert.get("previous_model_version") != alert.get("latest_model_version")
+    prompt_changed = alert.get("previous_prompt_hash") != alert.get("latest_prompt_hash")
+
+    if model_changed and prompt_changed:
+        cause = "model_and_prompt_change"
+        label = "Model version and prompt both changed"
+    elif model_changed:
+        cause = "model_change"
+        label = "Model version changed"
+    elif prompt_changed:
+        cause = "prompt_change"
+        label = "Prompt template changed"
+    else:
+        cause = "unexplained"
+        label = "No model or prompt change detected"
+
+    return {
+        "cause": cause,
+        "label": label,
+        "model_changed": model_changed,
+        "prompt_changed": prompt_changed,
+        **alert,
+    }

@@ -207,6 +207,7 @@ def export_looker_table(
     run_id: Optional[str] = None,
     demographic_attribute: str = "race_ethnicity",
     model_version: Optional[str] = None,
+    prompt_hash: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Format statistical metrics into a flattened Looker Studio-ready table with the exact columns:
@@ -273,7 +274,10 @@ def export_looker_table(
             except ImportError:
                 from biaslens.bq_logger import log_bias_metrics, new_run_id
             run_id = run_id or new_run_id()
-            log_bias_metrics(df, run_id=run_id, demographic_attribute=demographic_attribute, model_version=model_version)
+            log_bias_metrics(
+                df, run_id=run_id, demographic_attribute=demographic_attribute,
+                model_version=model_version, prompt_hash=prompt_hash,
+            )
             print(f"BigQuery bias_metrics table updated successfully (run_id={run_id}).")
         except Exception as e:
             print(f"[BigQuery Notice] Could not upload directly to BigQuery ({e}). CSV is available for Looker connection.")
@@ -331,6 +335,50 @@ def generate_plain_language_explanation(summary_report: Dict[str, Any]) -> str:
         "3. Provide practical, objective recommendations for future audit iterations (such as scaling sample size).\n"
         "STRICT CONSTRAINT: Do not calculate or judge bias yourself. Formulate your narrative strictly based on "
         "the provided numbers."
+    )
+
+    return query_gemini_agent(prompt)
+
+
+def generate_drift_explanation(diagnosed_alert: Dict[str, Any]) -> str:
+    """
+    Use Gemini exclusively to turn an already-diagnosed drift alert (from
+    bq_logger.diagnose_alert, which is pure code - no LLM involved in the
+    diagnosis) into a short plain-language paragraph for a human reader.
+
+    Gemini is given the numbers AND the deterministic cause label; it may
+    only narrate what those mean, never re-decide the cause or judge whether
+    the underlying disparity constitutes bias.
+    """
+    facts = {
+        "demographic_group": diagnosed_alert.get("group_name"),
+        "previous_disparity_pp": diagnosed_alert.get("previous_disparity_pp"),
+        "latest_disparity_pp": diagnosed_alert.get("latest_disparity_pp"),
+        "change_pp": diagnosed_alert.get("delta_pp"),
+        "previous_model_version": diagnosed_alert.get("previous_model_version"),
+        "latest_model_version": diagnosed_alert.get("latest_model_version"),
+        "model_version_changed": diagnosed_alert.get("model_changed"),
+        "prompt_template_changed": diagnosed_alert.get("prompt_changed"),
+        "deterministic_cause_label": diagnosed_alert.get("label"),
+    }
+
+    prompt = (
+        "You are an AI fairness audit assistant writing a short root-cause note for an "
+        "engineering team. A deterministic system (not you) has already compared two audit "
+        "runs and computed the facts below - it already decided the cause label; your job is "
+        "only to explain what these facts mean in plain language.\n\n"
+        f"Facts:\n{json.dumps(facts, indent=2, default=str)}\n\n"
+        "Instructions:\n"
+        "Write 2-3 sentences, plain language, for an engineer skimming a dashboard:\n"
+        "1. State how much the disparity changed and in which direction.\n"
+        "2. State the deterministic cause label as given - if it's 'unexplained', say plainly "
+        "that no known model or prompt change was detected between these two runs, so this may "
+        "be normal run-to-run variance, non-determinism in the model's outputs, or a change "
+        "that wasn't logged (e.g. underlying data or infrastructure) - do not guess further.\n"
+        "3. Do not invent a cause beyond the deterministic_cause_label. Do not state or imply "
+        "whether this represents unlawful or unethical discrimination.\n"
+        "STRICT CONSTRAINT: Do not re-derive or override the deterministic_cause_label - narrate "
+        "it, don't replace it."
     )
 
     return query_gemini_agent(prompt)

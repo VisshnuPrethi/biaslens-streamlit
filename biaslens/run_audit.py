@@ -18,9 +18,9 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 # Supports both a flat repo layout (modules alongside this file) and a
 # `biaslens/` package layout (imported as biaslens.<module>).
 try:
-    from pair_generator import generate_test_pairs
+    from pair_generator import generate_test_pairs, get_prompt_template_hash
 except ImportError:
-    from biaslens.pair_generator import generate_test_pairs
+    from biaslens.pair_generator import generate_test_pairs, get_prompt_template_hash
 
 try:
     from target_agent import query_gemini_agent
@@ -258,8 +258,9 @@ def run_audit(
     # the CLI run if BigQuery isn't reachable.
     if push_to_bq:
         try:
-            run_id = log_evaluation_results(results, model_version=model_version)
-            print(f"BigQuery: logged {len(results)} pairs to audit_results (run_id={run_id}, model={model_version}).", flush=True)
+            prompt_hash = get_prompt_template_hash()
+            run_id = log_evaluation_results(results, model_version=model_version, prompt_hash=prompt_hash)
+            print(f"BigQuery: logged {len(results)} pairs to audit_results (run_id={run_id}, model={model_version}, prompt_hash={prompt_hash}).", flush=True)
 
             demographic_attribute = results[0].get("demographic_attribute", "race_ethnicity")
             summary_report = calculate_disparate_impact(results)
@@ -270,6 +271,7 @@ def run_audit(
                 run_id=run_id,
                 demographic_attribute=demographic_attribute,
                 model_version=model_version,
+                prompt_hash=prompt_hash,
             )
             print(f"BigQuery: logged scored metrics to bias_metrics (run_id={run_id}).", flush=True)
         except Exception as e:
