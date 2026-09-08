@@ -74,6 +74,40 @@ def run_contingency_test(
     return test_name, statistic, p_value, is_significant
 
 
+def _wilson_score_interval(x: int, n: int, z: float = 1.959964) -> Tuple[float, float]:
+    """
+    95% Wilson score confidence interval for a single proportion (x successes
+    out of n trials). More reliable than a plain normal-approximation interval
+    when n is small or the rate is near 0%/100% - both common here given
+    typical per-group sample sizes.
+    """
+    if n == 0:
+        return 0.0, 0.0
+    p_hat = x / n
+    denom = 1 + (z ** 2) / n
+    center = (p_hat + (z ** 2) / (2 * n)) / denom
+    margin = (z * ((p_hat * (1 - p_hat) / n + (z ** 2) / (4 * n ** 2)) ** 0.5)) / denom
+    return max(0.0, center - margin), min(1.0, center + margin)
+
+
+def _newcombe_diff_interval(x1: int, n1: int, x2: int, n2: int, z: float = 1.959964) -> Tuple[float, float]:
+    """
+    95% confidence interval for the difference (p2 - p1) between two
+    independent proportions, using Newcombe's hybrid Wilson-score method
+    (Newcombe, 1998) - combines each group's individual Wilson interval
+    rather than assuming a normal distribution for the difference directly,
+    which holds up much better at small sample sizes than a Wald interval.
+    """
+    p1 = x1 / n1 if n1 else 0.0
+    p2 = x2 / n2 if n2 else 0.0
+    l1, u1 = _wilson_score_interval(x1, n1, z)
+    l2, u2 = _wilson_score_interval(x2, n2, z)
+    diff = p2 - p1
+    lower = diff - ((p2 - l2) ** 2 + (u1 - p1) ** 2) ** 0.5
+    upper = diff + ((u2 - p2) ** 2 + (p1 - l1) ** 2) ** 0.5
+    return max(-1.0, lower), min(1.0, upper)
+
+
 def calculate_group_metrics(
     group_name: str,
     demographic_attribute: str,
@@ -115,6 +149,10 @@ def calculate_group_metrics(
 
     significance_flag = "SIGNIFICANT (p < 0.05)" if is_significant else "NOT SIGNIFICANT (p >= 0.05)"
 
+    ci_lower, ci_upper = _newcombe_diff_interval(control_approved, total_pairs, cf_approved, total_pairs)
+    ci_lower_pp = round(ci_lower * 100.0, 2)
+    ci_upper_pp = round(ci_upper * 100.0, 2)
+
     return {
         "group_name": group_name,
         "demographic_attribute": demographic_attribute,
@@ -127,6 +165,8 @@ def calculate_group_metrics(
         "counterfactual_denied": cf_denied,
         "counterfactual_approval_rate_pct": round(cf_approval_rate_pct, 2),
         "disparity_percentage_points": round(disparity_pct_points, 2),
+        "ci_lower_pp": ci_lower_pp,
+        "ci_upper_pp": ci_upper_pp,
         "contingency_table": table,
         "test_used": test_name,
         "test_statistic": round(statistic, 4),
@@ -215,6 +255,8 @@ def export_looker_table(
     - control_approval_rate
     - counterfactual_approval_rate
     - disparity_pp
+    - ci_lower_pp
+    - ci_upper_pp
     - p_value
     - significance_flag
 
@@ -229,6 +271,8 @@ def export_looker_table(
             "control_approval_rate": g["control_approval_rate_pct"],
             "counterfactual_approval_rate": g["counterfactual_approval_rate_pct"],
             "disparity_pp": g["disparity_percentage_points"],
+            "ci_lower_pp": g.get("ci_lower_pp"),
+            "ci_upper_pp": g.get("ci_upper_pp"),
             "p_value": g["p_value"],
             "significance_flag": g["significance_flag"],
         })
@@ -240,6 +284,8 @@ def export_looker_table(
             "control_approval_rate": o["control_approval_rate_pct"],
             "counterfactual_approval_rate": o["counterfactual_approval_rate_pct"],
             "disparity_pp": o["disparity_percentage_points"],
+            "ci_lower_pp": o.get("ci_lower_pp"),
+            "ci_upper_pp": o.get("ci_upper_pp"),
             "p_value": o["p_value"],
             "significance_flag": o["significance_flag"],
         })
@@ -252,6 +298,8 @@ def export_looker_table(
         "control_approval_rate",
         "counterfactual_approval_rate",
         "disparity_pp",
+        "ci_lower_pp",
+        "ci_upper_pp",
         "p_value",
         "significance_flag",
     ]

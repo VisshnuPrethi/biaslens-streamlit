@@ -366,6 +366,57 @@ def callout(text: str, kind: str = "pending"):
 
 inject_css()
 
+
+# ---------------------------------------------------------------------------
+# Basic authentication gate (item 6 - Finale polish)
+# ---------------------------------------------------------------------------
+def check_authentication() -> bool:
+    """
+    Lightweight login gate for demo/review access - NOT production-grade auth
+    (plaintext comparison against a small credentials table in Streamlit
+    secrets). Appropriate for a controlled audience like a Finale review,
+    not a public-facing deployment. If no [credentials] are configured in
+    secrets (e.g. local dev), the gate is skipped entirely so it never blocks
+    development.
+    """
+    try:
+        credentials = dict(st.secrets["credentials"])
+    except Exception:
+        credentials = {}
+
+    if not credentials:
+        return True
+
+    if st.session_state.get("authenticated"):
+        return True
+
+    st.markdown(
+        "<div style='font-family:Source Serif 4, serif; font-size:1.8rem; "
+        "font-weight:600; margin-bottom:0.2rem;'>BiasLens</div>"
+        "<div style='font-family:IBM Plex Mono, monospace; font-size:0.85rem; "
+        "color:#9AA1AB; margin-bottom:2rem;'>AI Fairness Audit Platform &middot; sign in to continue</div>",
+        unsafe_allow_html=True,
+    )
+    with st.form("login_form"):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Sign in")
+
+    if submitted:
+        if credentials.get(username) == password:
+            st.session_state["authenticated"] = True
+            st.session_state["authenticated_user"] = username
+            st.rerun()
+        else:
+            st.error("Incorrect username or password.")
+
+    return False
+
+
+if not check_authentication():
+    st.stop()
+
+
 # ---------------------------------------------------------------------------
 # Sample / placeholder data - replace with real BigQuery or CSV loads later
 # ---------------------------------------------------------------------------
@@ -420,6 +471,18 @@ st.sidebar.markdown(
     "</div>",
     unsafe_allow_html=True,
 )
+
+if st.session_state.get("authenticated"):
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(
+        f"<div style='font-size:0.8rem; color:#9AA1AB;'>"
+        f"Signed in as <b>{st.session_state.get('authenticated_user', '')}</b></div>",
+        unsafe_allow_html=True,
+    )
+    if st.sidebar.button("Sign out"):
+        st.session_state["authenticated"] = False
+        st.session_state.pop("authenticated_user", None)
+        st.rerun()
 
 # ---------------------------------------------------------------------------
 # Session state - lets the Overview page see data uploaded on other pages
@@ -561,6 +624,52 @@ def render_bias_table_and_chart(df: pd.DataFrame):
         st.markdown('<div class="report-card">', unsafe_allow_html=True)
         st.markdown("### Statistical summary")
         st.dataframe(df, use_container_width=True, hide_index=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    has_ci = (
+        has_data
+        and {"disparity_pp", "ci_lower_pp", "ci_upper_pp"}.issubset(df.columns)
+        and df["ci_lower_pp"].notna().any()
+    )
+    if has_ci:
+        st.markdown('<div class="report-card">', unsafe_allow_html=True)
+        st.markdown("### Disparity with 95% confidence interval")
+        callout(
+            "A confidence interval that crosses 0 means the data can't rule out "
+            "'no real difference' at this sample size, even if the point estimate looks "
+            "large. Wider intervals mean more pairs are needed for a confident read.",
+            kind="pending",
+        )
+        band = (
+            alt.Chart(df)
+            .mark_rule(color="#12171D", size=2)
+            .encode(
+                x=alt.X("group_name:N", title=None, axis=alt.Axis(labelAngle=-40)),
+                y=alt.Y("ci_lower_pp:Q", title="Disparity (percentage points)"),
+                y2="ci_upper_pp:Q",
+            )
+        )
+        zero_line = (
+            alt.Chart(pd.DataFrame({"y": [0]}))
+            .mark_rule(strokeDash=[4, 4], color="#9AA1AB")
+            .encode(y="y:Q")
+        )
+        point = (
+            alt.Chart(df)
+            .mark_point(color="#C08A2E", size=90, filled=True)
+            .encode(
+                x=alt.X("group_name:N", title=None),
+                y=alt.Y("disparity_pp:Q"),
+                tooltip=["group_name", "disparity_pp", "ci_lower_pp", "ci_upper_pp", "p_value", "significance_flag"],
+            )
+        )
+        ci_chart = (
+            (band + point + zero_line)
+            .properties(height=280)
+            .configure_view(strokeWidth=0)
+            .configure_axis(grid=False)
+        )
+        st.altair_chart(ci_chart, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -995,6 +1104,8 @@ elif page == "Run New Audit":
                     "control_approval_rate": metrics["control_approval_rate_pct"],
                     "counterfactual_approval_rate": metrics["counterfactual_approval_rate_pct"],
                     "disparity_pp": metrics["disparity_percentage_points"],
+                    "ci_lower_pp": metrics["ci_lower_pp"],
+                    "ci_upper_pp": metrics["ci_upper_pp"],
                     "p_value": metrics["p_value"],
                     "significance_flag": metrics["significance_flag"],
                 }]),
@@ -1010,6 +1121,8 @@ elif page == "Run New Audit":
                         "control_approval_rate": metrics["control_approval_rate_pct"],
                         "counterfactual_approval_rate": metrics["counterfactual_approval_rate_pct"],
                         "disparity_pp": metrics["disparity_percentage_points"],
+                        "ci_lower_pp": metrics["ci_lower_pp"],
+                        "ci_upper_pp": metrics["ci_upper_pp"],
                         "p_value": metrics["p_value"],
                         "significance_flag": metrics["significance_flag"],
                     }])
