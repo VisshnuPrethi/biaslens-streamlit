@@ -13,3 +13,5 @@ __pycache__/
 *$py.class
 *.so
 .pytest_cache/
+
+service-account-key.json
