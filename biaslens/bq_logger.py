@@ -23,6 +23,20 @@ except ImportError:
     st = None
 
 
+class BQReadError(Exception):
+    """
+    Raised when a BigQuery read genuinely fails (bad/missing credentials,
+    wrong project, missing dataset or table, network error, etc).
+
+    This is deliberately distinct from "the query succeeded and returned zero
+    rows", which just means no audit has been run yet for that dimension.
+    Callers in app.py use this distinction to show "BigQuery error: <reason>"
+    instead of silently falling back to placeholder data - so a real
+    misconfiguration doesn't look identical to "no data yet".
+    """
+    pass
+
+
 def get_bq_client() -> bigquery.Client:
     """
     Initialize and return a BigQuery Client.
@@ -150,9 +164,13 @@ def log_bias_metrics(
 def load_latest_bias_metrics(demographic_attribute: str) -> Optional[pd.DataFrame]:
     """
     Read back the most recent run's bias_metrics rows for one demographic
-    attribute (e.g. 'race_ethnicity' or 'geographic_location'). Returns None
-    if BigQuery isn't reachable or there's no data yet, so callers can fall
-    back to CSV upload / sample data without crashing the page.
+    attribute (e.g. 'race_ethnicity' or 'geographic_location').
+
+    Returns None only when BigQuery was reached successfully but no rows
+    exist yet for this attribute (genuinely "no audit run yet"). Raises
+    BQReadError for anything else - bad credentials, wrong project, missing
+    dataset/table, network failure - so the caller can show the real reason
+    instead of a misleading "no data yet" placeholder.
     """
     try:
         client = get_bq_client()
@@ -175,14 +193,17 @@ def load_latest_bias_metrics(demographic_attribute: str) -> Optional[pd.DataFram
         )
         df = client.query(query, job_config=job_config).to_dataframe()
         return df if not df.empty else None
-    except Exception:
-        return None
+    except Exception as e:
+        raise BQReadError(f"{type(e).__name__}: {e}") from e
 
 
 def load_metrics_history(demographic_attribute: str) -> Optional[pd.DataFrame]:
     """
     Read back every run's bias_metrics rows for one demographic attribute,
     ordered by time - used for drift tracking (roadmap Phase 2/4).
+
+    Same contract as load_latest_bias_metrics: None means "reached BigQuery,
+    no rows yet"; a real failure raises BQReadError instead of being hidden.
     """
     try:
         client = get_bq_client()
@@ -198,8 +219,8 @@ def load_metrics_history(demographic_attribute: str) -> Optional[pd.DataFrame]:
         )
         df = client.query(query, job_config=job_config).to_dataframe()
         return df if not df.empty else None
-    except Exception:
-        return None
+    except Exception as e:
+        raise BQReadError(f"{type(e).__name__}: {e}") from e
 
 
 def detect_drift(demographic_attribute: str, threshold_pp: float = 5.0) -> Optional[List[Dict[str, Any]]]:

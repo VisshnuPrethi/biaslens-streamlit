@@ -19,7 +19,22 @@ DEFAULT_BASE_APPLICATION: Dict[str, Any] = {
     "employment_length": "4 years",
 }
 
-# Demographically-coded name pairs (20 per demographic group, 80 pairs total)
+# Multiple borderline financial profiles, all near the underwriting decision
+# threshold but at different strength levels. Testing the SAME name-pair
+# catalog against each of these multiplies effective sample size without
+# diluting the demographic name signal - and lets the audit answer a
+# stronger question than a single fixed scenario can: does a disparity hold
+# up across weak, moderate, and strong applications, or only at one specific
+# point? Within any single pair, control and counterfactual always share the
+# exact same profile - only the name differs - so this stays a valid matched
+# comparison, just pooled across more scenarios per demographic group.
+LOAN_PROFILE_VARIANTS: List[Dict[str, Any]] = [
+    {"profile_id": "moderate", "income": 68000, "credit_score": 665, "loan_amount": 25000, "employment_length": "4 years"},
+    {"profile_id": "weak", "income": 58000, "credit_score": 615, "loan_amount": 25000, "employment_length": "2 years"},
+    {"profile_id": "strong", "income": 82000, "credit_score": 705, "loan_amount": 20000, "employment_length": "6 years"},
+]
+
+# Demographically-coded name pairs (30 per demographic group, 120 pairs total)
 # Drawn from established audit study literature (e.g. Bertrand & Mullainathan, Gaddis)
 DEMOGRAPHIC_NAME_PAIRS: List[Dict[str, str]] = [
     # -------------------------------------------------------------------------
@@ -46,6 +61,16 @@ DEMOGRAPHIC_NAME_PAIRS: List[Dict[str, str]] = [
     {"pair_id": "pair_afam_m_08", "demographic_attribute": "race_ethnicity", "control_name": "Neil Meyer", "control_group": "Caucasian", "counterfactual_name": "Terrence Booker", "counterfactual_group": "African American"},
     {"pair_id": "pair_afam_m_09", "demographic_attribute": "race_ethnicity", "control_name": "Colin Bauer", "control_group": "Caucasian", "counterfactual_name": "Rashad Henderson", "counterfactual_group": "African American"},
     {"pair_id": "pair_afam_m_10", "demographic_attribute": "race_ethnicity", "control_name": "Scott Hoffmann", "control_group": "Caucasian", "counterfactual_name": "Kareem Banks", "counterfactual_group": "African American"},
+    {"pair_id": "pair_afam_f_11", "demographic_attribute": "race_ethnicity", "control_name": "Emily Baker", "control_group": "Caucasian", "counterfactual_name": "Aaliyah Freeman", "counterfactual_group": "African American"},
+    {"pair_id": "pair_afam_f_12", "demographic_attribute": "race_ethnicity", "control_name": "Allison Miller", "control_group": "Caucasian", "counterfactual_name": "Nia Coleman", "counterfactual_group": "African American"},
+    {"pair_id": "pair_afam_f_13", "demographic_attribute": "race_ethnicity", "control_name": "Carrie Krueger", "control_group": "Caucasian", "counterfactual_name": "Jasmine Mosley", "counterfactual_group": "African American"},
+    {"pair_id": "pair_afam_f_14", "demographic_attribute": "race_ethnicity", "control_name": "Sarah Miller", "control_group": "Caucasian", "counterfactual_name": "Destiny Gaines", "counterfactual_group": "African American"},
+    {"pair_id": "pair_afam_f_15", "demographic_attribute": "race_ethnicity", "control_name": "Claire Sullivan", "control_group": "Caucasian", "counterfactual_name": "Simone Dorsey", "counterfactual_group": "African American"},
+    {"pair_id": "pair_afam_m_11", "demographic_attribute": "race_ethnicity", "control_name": "Brad Walsh", "control_group": "Caucasian", "counterfactual_name": "Marcus Gaines", "counterfactual_group": "African American"},
+    {"pair_id": "pair_afam_m_12", "demographic_attribute": "race_ethnicity", "control_name": "Todd Schultz", "control_group": "Caucasian", "counterfactual_name": "Xavier Dorsey", "counterfactual_group": "African American"},
+    {"pair_id": "pair_afam_m_13", "demographic_attribute": "race_ethnicity", "control_name": "Matthew Clark", "control_group": "Caucasian", "counterfactual_name": "Terrell Mosley", "counterfactual_group": "African American"},
+    {"pair_id": "pair_afam_m_14", "demographic_attribute": "race_ethnicity", "control_name": "Brett Wagner", "control_group": "Caucasian", "counterfactual_name": "Andre Freeman", "counterfactual_group": "African American"},
+    {"pair_id": "pair_afam_m_15", "demographic_attribute": "race_ethnicity", "control_name": "Geoffrey Hansen", "control_group": "Caucasian", "counterfactual_name": "DeAndre Coleman", "counterfactual_group": "African American"},
 
     # -------------------------------------------------------------------------
     # 2. HISPANIC / LATINO (20 pairs: 10 Female, 10 Male)
@@ -71,6 +96,16 @@ DEMOGRAPHIC_NAME_PAIRS: List[Dict[str, str]] = [
     {"pair_id": "pair_hisp_m_08", "demographic_attribute": "race_ethnicity", "control_name": "Neil Meyer", "control_group": "Caucasian", "counterfactual_name": "Miguel Angel Ortiz", "counterfactual_group": "Hispanic/Latino"},
     {"pair_id": "pair_hisp_m_09", "demographic_attribute": "race_ethnicity", "control_name": "Colin Bauer", "control_group": "Caucasian", "counterfactual_name": "Andres Navarro", "counterfactual_group": "Hispanic/Latino"},
     {"pair_id": "pair_hisp_m_10", "demographic_attribute": "race_ethnicity", "control_name": "Scott Hoffmann", "control_group": "Caucasian", "counterfactual_name": "Jose Luis Reyes", "counterfactual_group": "Hispanic/Latino"},
+    {"pair_id": "pair_hisp_f_11", "demographic_attribute": "race_ethnicity", "control_name": "Emily Baker", "control_group": "Caucasian", "counterfactual_name": "Ximena Vargas", "counterfactual_group": "Hispanic/Latino"},
+    {"pair_id": "pair_hisp_f_12", "demographic_attribute": "race_ethnicity", "control_name": "Allison Miller", "control_group": "Caucasian", "counterfactual_name": "Valeria Cabrera", "counterfactual_group": "Hispanic/Latino"},
+    {"pair_id": "pair_hisp_f_13", "demographic_attribute": "race_ethnicity", "control_name": "Carrie Krueger", "control_group": "Caucasian", "counterfactual_name": "Fernanda Aguilar", "counterfactual_group": "Hispanic/Latino"},
+    {"pair_id": "pair_hisp_f_14", "demographic_attribute": "race_ethnicity", "control_name": "Sarah Miller", "control_group": "Caucasian", "counterfactual_name": "Paola Mendez", "counterfactual_group": "Hispanic/Latino"},
+    {"pair_id": "pair_hisp_f_15", "demographic_attribute": "race_ethnicity", "control_name": "Claire Sullivan", "control_group": "Caucasian", "counterfactual_name": "Yolanda Cordero", "counterfactual_group": "Hispanic/Latino"},
+    {"pair_id": "pair_hisp_m_11", "demographic_attribute": "race_ethnicity", "control_name": "Brad Walsh", "control_group": "Caucasian", "counterfactual_name": "Emilio Vargas", "counterfactual_group": "Hispanic/Latino"},
+    {"pair_id": "pair_hisp_m_12", "demographic_attribute": "race_ethnicity", "control_name": "Todd Schultz", "control_group": "Caucasian", "counterfactual_name": "Rodrigo Cabrera", "counterfactual_group": "Hispanic/Latino"},
+    {"pair_id": "pair_hisp_m_13", "demographic_attribute": "race_ethnicity", "control_name": "Matthew Clark", "control_group": "Caucasian", "counterfactual_name": "Esteban Aguilar", "counterfactual_group": "Hispanic/Latino"},
+    {"pair_id": "pair_hisp_m_14", "demographic_attribute": "race_ethnicity", "control_name": "Brett Wagner", "control_group": "Caucasian", "counterfactual_name": "Ricardo Mendez", "counterfactual_group": "Hispanic/Latino"},
+    {"pair_id": "pair_hisp_m_15", "demographic_attribute": "race_ethnicity", "control_name": "Geoffrey Hansen", "control_group": "Caucasian", "counterfactual_name": "Fernando Cordero", "counterfactual_group": "Hispanic/Latino"},
 
     # -------------------------------------------------------------------------
     # 3. SOUTH ASIAN (20 pairs: 10 Female, 10 Male)
@@ -96,6 +131,16 @@ DEMOGRAPHIC_NAME_PAIRS: List[Dict[str, str]] = [
     {"pair_id": "pair_sasian_m_08", "demographic_attribute": "race_ethnicity", "control_name": "Neil Meyer", "control_group": "Caucasian", "counterfactual_name": "Pranav Deshmukh", "counterfactual_group": "South Asian"},
     {"pair_id": "pair_sasian_m_09", "demographic_attribute": "race_ethnicity", "control_name": "Colin Bauer", "control_group": "Caucasian", "counterfactual_name": "Nikhil Bhatia", "counterfactual_group": "South Asian"},
     {"pair_id": "pair_sasian_m_10", "demographic_attribute": "race_ethnicity", "control_name": "Scott Hoffmann", "control_group": "Caucasian", "counterfactual_name": "Suresh Menon", "counterfactual_group": "South Asian"},
+    {"pair_id": "pair_sasian_f_11", "demographic_attribute": "race_ethnicity", "control_name": "Emily Baker", "control_group": "Caucasian", "counterfactual_name": "Anjali Desai", "counterfactual_group": "South Asian"},
+    {"pair_id": "pair_sasian_f_12", "demographic_attribute": "race_ethnicity", "control_name": "Allison Miller", "control_group": "Caucasian", "counterfactual_name": "Divya Menon", "counterfactual_group": "South Asian"},
+    {"pair_id": "pair_sasian_f_13", "demographic_attribute": "race_ethnicity", "control_name": "Carrie Krueger", "control_group": "Caucasian", "counterfactual_name": "Radhika Chopra", "counterfactual_group": "South Asian"},
+    {"pair_id": "pair_sasian_f_14", "demographic_attribute": "race_ethnicity", "control_name": "Sarah Miller", "control_group": "Caucasian", "counterfactual_name": "Swati Kulkarni", "counterfactual_group": "South Asian"},
+    {"pair_id": "pair_sasian_f_15", "demographic_attribute": "race_ethnicity", "control_name": "Claire Sullivan", "control_group": "Caucasian", "counterfactual_name": "Nandini Bhatt", "counterfactual_group": "South Asian"},
+    {"pair_id": "pair_sasian_m_11", "demographic_attribute": "race_ethnicity", "control_name": "Brad Walsh", "control_group": "Caucasian", "counterfactual_name": "Rajesh Bhatt", "counterfactual_group": "South Asian"},
+    {"pair_id": "pair_sasian_m_12", "demographic_attribute": "race_ethnicity", "control_name": "Todd Schultz", "control_group": "Caucasian", "counterfactual_name": "Karan Malhotra", "counterfactual_group": "South Asian"},
+    {"pair_id": "pair_sasian_m_13", "demographic_attribute": "race_ethnicity", "control_name": "Matthew Clark", "control_group": "Caucasian", "counterfactual_name": "Siddharth Chopra", "counterfactual_group": "South Asian"},
+    {"pair_id": "pair_sasian_m_14", "demographic_attribute": "race_ethnicity", "control_name": "Brett Wagner", "control_group": "Caucasian", "counterfactual_name": "Nikhil Kulkarni", "counterfactual_group": "South Asian"},
+    {"pair_id": "pair_sasian_m_15", "demographic_attribute": "race_ethnicity", "control_name": "Geoffrey Hansen", "control_group": "Caucasian", "counterfactual_name": "Vivek Desai", "counterfactual_group": "South Asian"},
 
     # -------------------------------------------------------------------------
     # 4. EAST ASIAN (20 pairs: 10 Female, 10 Male)
@@ -121,6 +166,16 @@ DEMOGRAPHIC_NAME_PAIRS: List[Dict[str, str]] = [
     {"pair_id": "pair_easian_m_08", "demographic_attribute": "race_ethnicity", "control_name": "Neil Meyer", "control_group": "Caucasian", "counterfactual_name": "Dong-Hyun Park", "counterfactual_group": "East Asian"},
     {"pair_id": "pair_easian_m_09", "demographic_attribute": "race_ethnicity", "control_name": "Colin Bauer", "control_group": "Caucasian", "counterfactual_name": "Kenji Takahashi", "counterfactual_group": "East Asian"},
     {"pair_id": "pair_easian_m_10", "demographic_attribute": "race_ethnicity", "control_name": "Scott Hoffmann", "control_group": "Caucasian", "counterfactual_name": "Daiki Watanabe", "counterfactual_group": "East Asian"},
+    {"pair_id": "pair_easian_f_11", "demographic_attribute": "race_ethnicity", "control_name": "Emily Baker", "control_group": "Caucasian", "counterfactual_name": "Aiko Watanabe", "counterfactual_group": "East Asian"},
+    {"pair_id": "pair_easian_f_12", "demographic_attribute": "race_ethnicity", "control_name": "Allison Miller", "control_group": "Caucasian", "counterfactual_name": "Yuki Nakamura", "counterfactual_group": "East Asian"},
+    {"pair_id": "pair_easian_f_13", "demographic_attribute": "race_ethnicity", "control_name": "Carrie Krueger", "control_group": "Caucasian", "counterfactual_name": "Na-Yeon Choi", "counterfactual_group": "East Asian"},
+    {"pair_id": "pair_easian_f_14", "demographic_attribute": "race_ethnicity", "control_name": "Sarah Miller", "control_group": "Caucasian", "counterfactual_name": "Hana Kobayashi", "counterfactual_group": "East Asian"},
+    {"pair_id": "pair_easian_f_15", "demographic_attribute": "race_ethnicity", "control_name": "Claire Sullivan", "control_group": "Caucasian", "counterfactual_name": "Xin Yang", "counterfactual_group": "East Asian"},
+    {"pair_id": "pair_easian_m_11", "demographic_attribute": "race_ethnicity", "control_name": "Brad Walsh", "control_group": "Caucasian", "counterfactual_name": "Ren Nakamura", "counterfactual_group": "East Asian"},
+    {"pair_id": "pair_easian_m_12", "demographic_attribute": "race_ethnicity", "control_name": "Todd Schultz", "control_group": "Caucasian", "counterfactual_name": "Tae-Yang Choi", "counterfactual_group": "East Asian"},
+    {"pair_id": "pair_easian_m_13", "demographic_attribute": "race_ethnicity", "control_name": "Matthew Clark", "control_group": "Caucasian", "counterfactual_name": "Haruto Kobayashi", "counterfactual_group": "East Asian"},
+    {"pair_id": "pair_easian_m_14", "demographic_attribute": "race_ethnicity", "control_name": "Brett Wagner", "control_group": "Caucasian", "counterfactual_name": "Feng Yang", "counterfactual_group": "East Asian"},
+    {"pair_id": "pair_easian_m_15", "demographic_attribute": "race_ethnicity", "control_name": "Geoffrey Hansen", "control_group": "Caucasian", "counterfactual_name": "Sora Watanabe", "counterfactual_group": "East Asian"},
 ]
 
 
@@ -235,6 +290,46 @@ GENDER_NAME_PAIRS: List[Dict[str, str]] = [
     {"pair_id": "pair_gender_108", "demographic_attribute": "gender", "control_name": "Erik Butler", "control_group": "Male", "counterfactual_name": "Melanie Butler", "counterfactual_group": "Female"},
     {"pair_id": "pair_gender_109", "demographic_attribute": "gender", "control_name": "Cody Henderson", "control_group": "Male", "counterfactual_name": "Kristen Henderson", "counterfactual_group": "Female"},
     {"pair_id": "pair_gender_110", "demographic_attribute": "gender", "control_name": "Miles Barnes", "control_group": "Male", "counterfactual_name": "Naomi Barnes", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_111", "demographic_attribute": "gender", "control_name": "Peter Bryant", "control_group": "Male", "counterfactual_name": "Julie Bryant", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_112", "demographic_attribute": "gender", "control_name": "Adam Alexander", "control_group": "Male", "counterfactual_name": "Joan Alexander", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_113", "demographic_attribute": "gender", "control_name": "Nathan Griffin", "control_group": "Male", "counterfactual_name": "Christina Griffin", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_114", "demographic_attribute": "gender", "control_name": "Zachary Hayes", "control_group": "Male", "counterfactual_name": "Joyce Hayes", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_115", "demographic_attribute": "gender", "control_name": "Kyle Ford", "control_group": "Male", "counterfactual_name": "Ruth Ford", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_116", "demographic_attribute": "gender", "control_name": "Walter Hamilton", "control_group": "Male", "counterfactual_name": "Andrea Hamilton", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_117", "demographic_attribute": "gender", "control_name": "Harold Graham", "control_group": "Male", "counterfactual_name": "Rachel Graham", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_118", "demographic_attribute": "gender", "control_name": "Carl Wallace", "control_group": "Male", "counterfactual_name": "Virginia Wallace", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_119", "demographic_attribute": "gender", "control_name": "Arthur Woods", "control_group": "Male", "counterfactual_name": "Catherine Woods", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_120", "demographic_attribute": "gender", "control_name": "Gerald Cole", "control_group": "Male", "counterfactual_name": "Martha Cole", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_121", "demographic_attribute": "gender", "control_name": "Roger West", "control_group": "Male", "counterfactual_name": "Debra West", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_122", "demographic_attribute": "gender", "control_name": "Keith Fox", "control_group": "Male", "counterfactual_name": "Heather Fox", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_123", "demographic_attribute": "gender", "control_name": "Jeremy Owens", "control_group": "Male", "counterfactual_name": "Diane Owens", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_124", "demographic_attribute": "gender", "control_name": "Terry Reynolds", "control_group": "Male", "counterfactual_name": "Olivia Reynolds", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_125", "demographic_attribute": "gender", "control_name": "Sean Fisher", "control_group": "Male", "counterfactual_name": "Ann Fisher", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_126", "demographic_attribute": "gender", "control_name": "Christian Ellis", "control_group": "Male", "counterfactual_name": "Rose Ellis", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_127", "demographic_attribute": "gender", "control_name": "Ethan Harrison", "control_group": "Male", "counterfactual_name": "Teresa Harrison", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_128", "demographic_attribute": "gender", "control_name": "Austin Gibson", "control_group": "Male", "counterfactual_name": "Gloria Gibson", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_129", "demographic_attribute": "gender", "control_name": "Dennis Marshall", "control_group": "Male", "counterfactual_name": "Evelyn Marshall", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_130", "demographic_attribute": "gender", "control_name": "Jerry Murray", "control_group": "Male", "counterfactual_name": "Jean Murray", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_131", "demographic_attribute": "gender", "control_name": "Tyler Freeman", "control_group": "Male", "counterfactual_name": "Cheryl Freeman", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_132", "demographic_attribute": "gender", "control_name": "Aaron Wells", "control_group": "Male", "counterfactual_name": "Mildred Wells", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_133", "demographic_attribute": "gender", "control_name": "Jose Webb", "control_group": "Male", "counterfactual_name": "Katherine Webb", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_134", "demographic_attribute": "gender", "control_name": "Henry Simpson", "control_group": "Male", "counterfactual_name": "Judith Simpson", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_135", "demographic_attribute": "gender", "control_name": "Douglas Stevens", "control_group": "Male", "counterfactual_name": "Rosa Stevens", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_136", "demographic_attribute": "gender", "control_name": "Adrian Tucker", "control_group": "Male", "counterfactual_name": "Janet Tucker", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_137", "demographic_attribute": "gender", "control_name": "Alexander Porter", "control_group": "Male", "counterfactual_name": "Carolyn Porter", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_138", "demographic_attribute": "gender", "control_name": "Wayne Hunter", "control_group": "Male", "counterfactual_name": "Christine Hunter", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_139", "demographic_attribute": "gender", "control_name": "Fred Hicks", "control_group": "Male", "counterfactual_name": "Marie Hicks", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_140", "demographic_attribute": "gender", "control_name": "Bruce Crawford", "control_group": "Male", "counterfactual_name": "Lillian Crawford", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_141", "demographic_attribute": "gender", "control_name": "Ernest Henry", "control_group": "Male", "counterfactual_name": "Norma Henry", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_142", "demographic_attribute": "gender", "control_name": "Curtis Boyd", "control_group": "Male", "counterfactual_name": "Peggy Boyd", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_143", "demographic_attribute": "gender", "control_name": "Ray Mason", "control_group": "Male", "counterfactual_name": "Wanda Mason", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_144", "demographic_attribute": "gender", "control_name": "Lloyd Kennedy", "control_group": "Male", "counterfactual_name": "Loretta Kennedy", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_145", "demographic_attribute": "gender", "control_name": "Herbert Warren", "control_group": "Male", "counterfactual_name": "Regina Warren", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_146", "demographic_attribute": "gender", "control_name": "Todd Dixon", "control_group": "Male", "counterfactual_name": "Priscilla Dixon", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_147", "demographic_attribute": "gender", "control_name": "Craig Ramsey", "control_group": "Male", "counterfactual_name": "Naomi Ramsey", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_148", "demographic_attribute": "gender", "control_name": "Marvin Reid", "control_group": "Male", "counterfactual_name": "Tracy Reid", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_149", "demographic_attribute": "gender", "control_name": "Corey Black", "control_group": "Male", "counterfactual_name": "Bonnie Black", "counterfactual_group": "Female"},
+    {"pair_id": "pair_gender_150", "demographic_attribute": "gender", "control_name": "Dale Grant", "control_group": "Male", "counterfactual_name": "Kathy Grant", "counterfactual_group": "Female"},
 ]
 
 
@@ -291,10 +386,15 @@ def create_loan_pair(
     pair_id: str,
     base_application: Dict[str, Any],
     name_pair: Dict[str, str],
+    profile_id: str = "default",
 ) -> Dict[str, Any]:
     """
     Generate a single counterfactual pair where financial attributes are strictly identical,
     and only the demographic signal (applicant name) differs.
+
+    profile_id tags which financial-profile variant this pair was evaluated under (see
+    LOAN_PROFILE_VARIANTS) - purely informational, doesn't affect scoring, but lets a
+    later breakdown answer "does the disparity hold across weak/moderate/strong applications".
     """
     demographic_attribute = name_pair.get("demographic_attribute", "race_ethnicity")
 
@@ -331,6 +431,7 @@ def create_loan_pair(
     return {
         "pair_id": pair_id,
         "demographic_attribute": demographic_attribute,
+        "profile_id": profile_id,
         "control_group": name_pair["control_group"],
         "counterfactual_group": name_pair["counterfactual_group"],
         "base_application": {
@@ -372,36 +473,60 @@ def flatten_pairs(pairs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def generate_test_pairs(
     base_application: Optional[Dict[str, Any]] = None,
+    base_applications: Optional[List[Dict[str, Any]]] = None,
     name_pairs: Optional[List[Dict[str, str]]] = None,
     output_filepath: Optional[str] = "data/loan_application_pairs.json",
 ) -> List[Dict[str, Any]]:
     """
-    Generate counterfactual loan application pairs for race/ethnicity and optionally save to JSON.
+    Generate counterfactual loan application pairs and optionally save to JSON.
 
-    :param base_application: Dictionary with income, credit_score, loan_amount, employment_length.
+    :param base_application: Single financial profile (income, credit_score, loan_amount,
+        employment_length). Used only when base_applications isn't given.
+    :param base_applications: List of financial profile variants (each needs a "profile_id"
+        plus the same four fields). When given, every name pair is evaluated against EVERY
+        profile in this list - e.g. 120 name pairs x 3 profiles = 360 evaluated pairs - which
+        multiplies effective sample size and tests whether a disparity holds across weak,
+        moderate and strong applications rather than one fixed scenario. Takes priority over
+        base_application. Defaults to a single profile (DEFAULT_BASE_APPLICATION) when neither
+        is given, matching the original single-profile behavior.
     :param name_pairs: List of demographically-coded name pair definitions.
     :param output_filepath: Destination JSON file path.
     :return: List of pair dictionaries.
     """
-    app = base_application or DEFAULT_BASE_APPLICATION
+    if base_applications:
+        profiles = base_applications
+    elif base_application:
+        profiles = [{**base_application, "profile_id": base_application.get("profile_id", "default")}]
+    else:
+        profiles = [DEFAULT_BASE_APPLICATION]
+
     pairs_catalog = name_pairs or DEMOGRAPHIC_NAME_PAIRS
 
-    # Validate base application required fields
+    # Validate every profile has the required fields
     required_fields = ["income", "credit_score", "loan_amount", "employment_length"]
-    missing_fields = [field for field in required_fields if field not in app]
-    if missing_fields:
-        raise ValueError(f"Base application is missing required fields: {missing_fields}")
+    for profile in profiles:
+        missing_fields = [field for field in required_fields if field not in profile]
+        if missing_fields:
+            raise ValueError(f"Base application '{profile.get('profile_id', '?')}' is missing required fields: {missing_fields}")
 
     generated_pairs: List[Dict[str, Any]] = []
+    multi_profile = len(profiles) > 1
 
-    for index, name_pair in enumerate(pairs_catalog, start=1):
-        pair_id = name_pair.get("pair_id") or f"pair_{index:03d}_{uuid.uuid4().hex[:6]}"
-        pair = create_loan_pair(
-            pair_id=pair_id,
-            base_application=app,
-            name_pair=name_pair,
-        )
-        generated_pairs.append(pair)
+    for profile in profiles:
+        profile_id = profile.get("profile_id", "default")
+        for index, name_pair in enumerate(pairs_catalog, start=1):
+            base_pair_id = name_pair.get("pair_id") or f"pair_{index:03d}_{uuid.uuid4().hex[:6]}"
+            # Keep pair_id unchanged in the single-profile case (backward compatible with
+            # existing cached results); suffix with the profile when multiplying, so each
+            # name pair x profile combination gets its own unique, traceable id.
+            pair_id = f"{base_pair_id}__{profile_id}" if multi_profile else base_pair_id
+            pair = create_loan_pair(
+                pair_id=pair_id,
+                base_application=profile,
+                name_pair=name_pair,
+                profile_id=profile_id,
+            )
+            generated_pairs.append(pair)
 
     if output_filepath:
         save_pairs_to_json(generated_pairs, output_filepath)
@@ -530,13 +655,25 @@ def generate_location_pairs(
 
 
 if __name__ == "__main__":
-    # 1. Generate standard race/ethnicity pairs
+    # 1. Generate race/ethnicity pairs across all 3 financial profile variants
+    #    (120 name pairs x 3 profiles = 360 evaluated pairs, up from 80 single-profile)
     race_output_path = "data/loan_application_pairs.json"
-    race_pairs = generate_test_pairs(output_filepath=race_output_path)
-    print(f"Generated {len(race_pairs)} race/ethnicity counterfactual pairs ({len(race_pairs) * 2} cases).")
+    race_pairs = generate_test_pairs(base_applications=LOAN_PROFILE_VARIANTS, output_filepath=race_output_path)
+    print(f"Generated {len(race_pairs)} race/ethnicity counterfactual pairs ({len(race_pairs) * 2} cases) "
+          f"across {len(LOAN_PROFILE_VARIANTS)} financial profiles.")
     print(f"Saved to: {race_output_path}")
 
-    # 2. Generate geographic location pairs from location_samples.json
+    # 2. Generate gender pairs across all 3 financial profile variants
+    #    (150 name pairs x 3 profiles = 450 evaluated pairs, up from 110 single-profile)
+    gender_output_path = "data/gender_pairs.json"
+    gender_pairs = generate_test_pairs(
+        base_applications=LOAN_PROFILE_VARIANTS, name_pairs=GENDER_NAME_PAIRS, output_filepath=gender_output_path
+    )
+    print(f"\nGenerated {len(gender_pairs)} gender counterfactual pairs ({len(gender_pairs) * 2} cases) "
+          f"across {len(LOAN_PROFILE_VARIANTS)} financial profiles.")
+    print(f"Saved to: {gender_output_path}")
+
+    # 3. Generate geographic location pairs from location_samples.json
     loc_samples_path = "data/location_samples.json"
     if os.path.exists(loc_samples_path):
         geo_output_path = "data/geo_pairs.json"

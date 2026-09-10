@@ -1,49 +1,59 @@
 """
 BiasLens - AI Fairness Audit Platform
-Streamlit front-end. Data connections are placeholders for now -
-wire up BigQuery / CSV loading where marked TODO.
+Streamlit front-end. Reads live results from BigQuery (falls back to a
+manual CSV upload, then to placeholder sample data if neither is available).
 """
 
 import os
 import re
+import sys
 import time
 import uuid
+from typing import Optional
 
 import streamlit as st
 import pandas as pd
 import altair as alt
 
+# Ensure both workspace root and biaslens/ directory are on sys.path
+_root_dir = os.path.abspath(os.path.dirname(__file__))
+_pkg_dir = os.path.join(_root_dir, "biaslens")
+if _root_dir not in sys.path:
+    sys.path.insert(0, _root_dir)
+if _pkg_dir not in sys.path and os.path.isdir(_pkg_dir):
+    sys.path.insert(0, _pkg_dir)
+
 # ---------------------------------------------------------------------------
 # Pipeline wiring - powers the "Run New Audit" live-test page.
-# Supports both a flat repo layout (modules alongside app.py) and a
-# `biaslens/` package layout (modules imported as biaslens.<module>).
+# Supports both a `biaslens/` package layout (modules imported as biaslens.<module>)
+# and a flat repo layout (modules alongside app.py).
 # ---------------------------------------------------------------------------
 try:
-    from pair_generator import create_loan_pair, build_loan_prompt, DEMOGRAPHIC_NAME_PAIRS, GENDER_NAME_PAIRS
-except ImportError:
-    from biaslens.pair_generator import create_loan_pair, build_loan_prompt, DEMOGRAPHIC_NAME_PAIRS, GENDER_NAME_PAIRS
-
-try:
-    from target_agent import query_gemini_agent
-except ImportError:
-    from biaslens.target_agent import query_gemini_agent
-
-try:
-    from scorer import calculate_group_metrics, generate_drift_explanation
-except ImportError:
-    from biaslens.scorer import calculate_group_metrics, generate_drift_explanation
-
-try:
-    from bq_logger import (
-        log_evaluation_results,
-        log_bias_metrics,
-        load_latest_bias_metrics,
-        load_metrics_history,
-        detect_drift,
-        diagnose_alert,
-        new_run_id,
+    from biaslens.pair_generator import (
+        create_loan_pair,
+        build_loan_prompt,
+        DEMOGRAPHIC_NAME_PAIRS,
+        GENDER_NAME_PAIRS,
     )
 except ImportError:
+    from pair_generator import (  # type: ignore[import-not-found]
+        create_loan_pair,
+        build_loan_prompt,
+        DEMOGRAPHIC_NAME_PAIRS,
+        GENDER_NAME_PAIRS,
+    )
+
+try:
+    from biaslens.target_agent import query_gemini_agent
+except ImportError:
+    from target_agent import query_gemini_agent  # type: ignore[import-not-found]
+
+try:
+    from biaslens.scorer import calculate_group_metrics, generate_drift_explanation
+except ImportError:
+    from scorer import calculate_group_metrics, generate_drift_explanation  # type: ignore[import-not-found]
+
+try:
     from biaslens.bq_logger import (
         log_evaluation_results,
         log_bias_metrics,
@@ -52,7 +62,24 @@ except ImportError:
         detect_drift,
         diagnose_alert,
         new_run_id,
+        BQReadError,
     )
+except ImportError:
+    from bq_logger import (  # type: ignore[import-not-found]
+        log_evaluation_results,
+        log_bias_metrics,
+        load_latest_bias_metrics,
+        load_metrics_history,
+        detect_drift,
+        diagnose_alert,
+        new_run_id,
+        BQReadError,
+    )
+
+
+def _dataset_hint() -> str:
+    """Best-effort dataset name for error messages - mirrors bq_logger's default."""
+    return os.environ.get("BQ_DATASET_ID", "biaslens_data")
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -130,7 +157,7 @@ def extract_confidence(raw_response: str):
 
 def query_with_retry(prompt: str, max_retries: int = 3) -> str:
     """Query the target agent with basic backoff on rate-limit / server errors."""
-    last_err = None
+    last_err: Optional[Exception] = None
     for attempt in range(1, max_retries + 1):
         try:
             return query_gemini_agent(prompt)
@@ -147,7 +174,11 @@ def query_with_retry(prompt: str, max_retries: int = 3) -> str:
                 raise
             else:
                 time.sleep(2 * attempt)
-    raise last_err
+    if last_err is not None:
+        raise last_err
+    # Only reachable if max_retries <= 0 was passed in, so the loop body never ran
+    # and no exception was ever captured - fail loudly instead of "raise None".
+    raise RuntimeError(f"query_with_retry: no attempts were made (max_retries={max_retries})")
 
 
 # ---------------------------------------------------------------------------
@@ -463,11 +494,32 @@ page = st.sidebar.radio(
     label_visibility="collapsed",
 )
 
+def _sidebar_bq_status() -> str:
+    """
+    One-line, honest BigQuery status for the sidebar - checked against the
+    already-cached reads (no extra queries), so this costs nothing extra on
+    pages that don't touch BigQuery. Never raises: any error is reported as
+    the status itself rather than crashing the sidebar.
+    """
+    checked_attrs = ["race_ethnicity", "geographic_location", "gender"]
+    saw_data = False
+    for attr in checked_attrs:
+        try:
+            if cached_latest_bias_metrics(attr) is not None:
+                saw_data = True
+                break
+        except BQReadError as e:
+            return f"BigQuery error - {e}"
+        except Exception as e:
+            return f"BigQuery error - {type(e).__name__}: {e}"
+    return "Connected - showing live results" if saw_data else "Connected - no runs logged yet"
+
+
 st.sidebar.markdown("---")
 st.sidebar.markdown(
     "<div style='font-size:0.85rem; line-height:1.6;'>"
     "<b>Stack</b><br>Gemini API · BigQuery · SciPy · Looker Studio"
-    "<br><br><b>Status</b><br>Demo build - data connections pending"
+    f"<br><br><b>Status</b><br>{_sidebar_bq_status()}"
     "</div>",
     unsafe_allow_html=True,
 )
@@ -531,7 +583,18 @@ def load_data(
         )
         return st.session_state[session_key]
 
-    bq_df = cached_latest_bias_metrics(demographic_attribute)
+    try:
+        bq_df = cached_latest_bias_metrics(demographic_attribute)
+    except BQReadError as e:
+        callout(
+            f"BigQuery error while loading {label.lower()} data - showing placeholder "
+            f"structure instead: <code>{e}</code>. Check GCP_PROJECT_ID / credentials "
+            f"(local) or the <code>[gcp_service_account]</code> secret (Streamlit Cloud), "
+            f"and that the <code>{_dataset_hint()}</code> dataset/tables exist.",
+            kind="flag",
+        )
+        return sample_df
+
     if bq_df is not None:
         run_id = bq_df["run_id"].iloc[0] if "run_id" in bq_df.columns else "unknown"
         callout(
@@ -543,9 +606,10 @@ def load_data(
         return bq_df
 
     callout(
-        f"No BigQuery data yet and no file uploaded - showing placeholder structure for "
-        f"{label.lower()}. Run <code>run_audit.py --push-to-bq</code>, or upload the "
-        f"exported CSV from <code>scorer.py</code> above.",
+        f"BigQuery connected, but no runs logged yet for {label.lower()} - showing "
+        f"placeholder structure. Run <code>run_audit.py --push-to-bq</code>, tick "
+        f"\"Save this test to BigQuery\" on Run New Audit, or upload the exported CSV "
+        f"from <code>scorer.py</code> above.",
         kind="pending",
     )
     return sample_df
@@ -840,9 +904,22 @@ elif page == "Drift Tracking":
     drift_dimension = st.selectbox("Dimension", list(DIMENSION_ATTRIBUTES.keys()))
     attribute = DIMENSION_ATTRIBUTES[drift_dimension]
 
-    history = cached_metrics_history(attribute)
+    history = None
+    bq_error = None
+    try:
+        history = cached_metrics_history(attribute)
+    except BQReadError as e:
+        bq_error = str(e)
 
-    if history is None:
+    if bq_error is not None:
+        st.markdown('<div class="report-card">', unsafe_allow_html=True)
+        callout(
+            f"BigQuery error while loading drift history for {drift_dimension.lower()}: "
+            f"<code>{bq_error}</code>. Check credentials / project / dataset config.",
+            kind="flag",
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+    elif history is None:
         st.markdown('<div class="report-card">', unsafe_allow_html=True)
         callout(
             f"No run history yet for {drift_dimension.lower()}. Run "
@@ -857,7 +934,10 @@ elif page == "Drift Tracking":
         # Basic drift alerting - flag any group whose disparity moved a lot
         # since the immediately preceding run, then diagnose why (pure code,
         # comparing model_version / prompt_hash between the two runs).
-        alerts = cached_detect_drift(attribute, threshold_pp=5.0)
+        try:
+            alerts = cached_detect_drift(attribute, threshold_pp=5.0)
+        except BQReadError:
+            alerts = None  # already surfaced as a BigQuery error above for `history`
         if alerts:
             flagged = [diagnose_alert(a) for a in alerts if a["flagged"]]
             st.markdown('<div class="report-card">', unsafe_allow_html=True)
@@ -972,10 +1052,12 @@ elif page == "Run New Audit":
 
         log_to_bq = st.checkbox(
             "Save this test to BigQuery",
-            value=False,
-            help="Off by default. When checked, this pair and its scored metrics are appended "
-                 "to your BigQuery audit_results / bias_metrics tables, visible to anyone with "
-                 "access to that project - the same tables the dashboard and Looker Studio read.",
+            value=True,
+            help="On by default, so this test shows up on the matching audit page and in "
+                 "Drift Tracking right after you run it. This pair and its scored metrics are "
+                 "appended to your BigQuery audit_results / bias_metrics tables, visible to "
+                 "anyone with access to that project - the same tables the dashboard and "
+                 "Looker Studio read. Uncheck to test without persisting anything.",
         )
         submitted = st.form_submit_button("Run audit")
     st.markdown('</div>', unsafe_allow_html=True)

@@ -1,0 +1,9 @@
+{
+  "include": [
+    ".",
+    "biaslens"
+  ],
+  "extraPaths": [
+    "biaslens"
+  ]
+}

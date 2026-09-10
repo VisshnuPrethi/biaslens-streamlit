@@ -18,9 +18,9 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 # Supports both a flat repo layout (modules alongside this file) and a
 # `biaslens/` package layout (imported as biaslens.<module>).
 try:
-    from pair_generator import generate_test_pairs, get_prompt_template_hash
+    from pair_generator import generate_test_pairs, get_prompt_template_hash, GENDER_NAME_PAIRS, LOAN_PROFILE_VARIANTS
 except ImportError:
-    from biaslens.pair_generator import generate_test_pairs, get_prompt_template_hash
+    from biaslens.pair_generator import generate_test_pairs, get_prompt_template_hash, GENDER_NAME_PAIRS, LOAN_PROFILE_VARIANTS
 
 try:
     from target_agent import query_gemini_agent
@@ -137,6 +137,7 @@ def run_audit(
     use_cache: bool = True,
     push_to_bq: bool = False,
     model_version: Optional[str] = None,
+    dimension: str = "race",
 ) -> List[Dict[str, Any]]:
     """
     Execute bias audit across control and counterfactual pairs.
@@ -149,13 +150,32 @@ def run_audit(
     :param model_version: Tag stored alongside the run in BigQuery, so drift tracking can
         attribute a change in disparity to a specific model swap. Defaults to the
         GEMINI_MODEL env var if not given.
+    :param dimension: Which name-pair catalog to auto-generate if pairs_file doesn't exist
+        yet - 'race' (DEMOGRAPHIC_NAME_PAIRS) or 'gender' (GENDER_NAME_PAIRS). Geographic
+        pairs use a different generator (generate_location_pairs, needs location_samples.json)
+        and aren't auto-generated here - point --pairs at an existing data/geo_pairs.json
+        instead. Ignored if pairs_file already exists on disk. Getting this right matters:
+        pairs_file previously always fell back to race pairs regardless of what a "gender"
+        or "geographic" run was meant to test, which is how a gender push could end up
+        tagged/scored against the wrong dimension's data.
     :return: List of evaluated pair dictionaries.
     """
     model_version = model_version or os.environ.get("GEMINI_MODEL", "unknown")
     # 1. Load pairs from disk (or generate fresh if missing)
     if not os.path.exists(pairs_file):
-        print(f"Pairs file '{pairs_file}' not found. Generating fresh test pairs...", flush=True)
-        pairs = generate_test_pairs(output_filepath=pairs_file)
+        print(f"Pairs file '{pairs_file}' not found. Generating fresh '{dimension}' test pairs...", flush=True)
+        if dimension == "gender":
+            pairs = generate_test_pairs(
+                base_applications=LOAN_PROFILE_VARIANTS, name_pairs=GENDER_NAME_PAIRS, output_filepath=pairs_file
+            )
+        elif dimension == "race":
+            pairs = generate_test_pairs(base_applications=LOAN_PROFILE_VARIANTS, output_filepath=pairs_file)
+        else:
+            raise ValueError(
+                f"Cannot auto-generate pairs for dimension='{dimension}'. Geographic pairs "
+                f"need generate_location_pairs() with a location_samples.json - point --pairs "
+                f"at an existing pairs file (e.g. data/geo_pairs.json) instead."
+            )
     else:
         with open(pairs_file, "r", encoding="utf-8") as f:
             pairs = json.load(f)
@@ -347,6 +367,13 @@ if __name__ == "__main__":
     parser.add_argument("--no-cache", action="store_true", help="Disable cache and re-evaluate all pairs.")
     parser.add_argument("--push-to-bq", action="store_true", help="Log results and scored metrics to BigQuery.")
     parser.add_argument(
+        "--dimension", choices=["race", "gender"], default="race",
+        help="Which name-pair catalog to auto-generate if --pairs doesn't exist yet. "
+             "Ignored if the pairs file already exists. For a gender run against a fresh "
+             "file, pass --pairs data/gender_pairs.json --dimension gender. For geographic, "
+             "pre-generate data/geo_pairs.json (via pair_generator.py) and pass that as --pairs.",
+    )
+    parser.add_argument(
         "--model-version", default=None,
         help="Tag for this run's model version, stored in BigQuery for drift tracking. "
              "Defaults to the GEMINI_MODEL env var (e.g. 'gemini-flash-lite-latest').",
@@ -360,4 +387,5 @@ if __name__ == "__main__":
         use_cache=not args.no_cache,
         push_to_bq=args.push_to_bq,
         model_version=args.model_version,
+        dimension=args.dimension,
     )
