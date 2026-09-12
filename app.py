@@ -6,7 +6,6 @@ manual CSV upload, then to placeholder sample data if neither is available).
 
 import os
 import re
-import sys
 import time
 import uuid
 from typing import Optional
@@ -15,46 +14,28 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 
-# Ensure both workspace root and biaslens/ directory are on sys.path
-_root_dir = os.path.abspath(os.path.dirname(__file__))
-_pkg_dir = os.path.join(_root_dir, "biaslens")
-if _root_dir not in sys.path:
-    sys.path.insert(0, _root_dir)
-if _pkg_dir not in sys.path and os.path.isdir(_pkg_dir):
-    sys.path.insert(0, _pkg_dir)
-
 # ---------------------------------------------------------------------------
 # Pipeline wiring - powers the "Run New Audit" live-test page.
-# Supports both a `biaslens/` package layout (modules imported as biaslens.<module>)
-# and a flat repo layout (modules alongside app.py).
+# Supports both a flat repo layout (modules alongside app.py) and a
+# `biaslens/` package layout (modules imported as biaslens.<module>).
 # ---------------------------------------------------------------------------
 try:
-    from biaslens.pair_generator import (
-        create_loan_pair,
-        build_loan_prompt,
-        DEMOGRAPHIC_NAME_PAIRS,
-        GENDER_NAME_PAIRS,
-    )
+    from pair_generator import create_loan_pair, build_loan_prompt, DEMOGRAPHIC_NAME_PAIRS, GENDER_NAME_PAIRS
 except ImportError:
-    from pair_generator import (  # type: ignore[import-not-found]
-        create_loan_pair,
-        build_loan_prompt,
-        DEMOGRAPHIC_NAME_PAIRS,
-        GENDER_NAME_PAIRS,
-    )
+    from biaslens.pair_generator import create_loan_pair, build_loan_prompt, DEMOGRAPHIC_NAME_PAIRS, GENDER_NAME_PAIRS
 
 try:
+    from target_agent import query_gemini_agent
+except ImportError:
     from biaslens.target_agent import query_gemini_agent
-except ImportError:
-    from target_agent import query_gemini_agent  # type: ignore[import-not-found]
 
 try:
+    from scorer import calculate_group_metrics, generate_drift_explanation
+except ImportError:
     from biaslens.scorer import calculate_group_metrics, generate_drift_explanation
-except ImportError:
-    from scorer import calculate_group_metrics, generate_drift_explanation  # type: ignore[import-not-found]
 
 try:
-    from biaslens.bq_logger import (
+    from bq_logger import (
         log_evaluation_results,
         log_bias_metrics,
         load_latest_bias_metrics,
@@ -65,7 +46,7 @@ try:
         BQReadError,
     )
 except ImportError:
-    from bq_logger import (  # type: ignore[import-not-found]
+    from biaslens.bq_logger import (
         log_evaluation_results,
         log_bias_metrics,
         load_latest_bias_metrics,
@@ -101,7 +82,11 @@ def cached_detect_drift(demographic_attribute: str, threshold_pp: float = 5.0):
 # vars - bridge them so target_agent.py's os.environ.get(...) calls keep
 # working unchanged, whether running locally (.env) or deployed (secrets.toml).
 try:
-    for _key in ("GEMINI_API_KEY", "GEMINI_MODEL", "GCP_PROJECT_ID", "BQ_DATASET_ID", "BQ_TABLE_ID"):
+    for _key in (
+        "GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_BACKEND", "GEMINI_VERTEX_LOCATION",
+        "GCP_PROJECT_ID", "BQ_DATASET_ID", "BQ_TABLE_ID",
+        "BQ_RESULTS_TABLE_ID", "BQ_METRICS_TABLE_ID",
+    ):
         if _key not in os.environ and _key in st.secrets:
             os.environ[_key] = str(st.secrets[_key])
 except Exception:
