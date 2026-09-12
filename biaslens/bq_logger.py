@@ -41,16 +41,37 @@ def get_bq_client() -> bigquery.Client:
     """
     Initialize and return a BigQuery Client.
 
-    On Streamlit Cloud, credentials come from st.secrets["gcp_service_account"]
-    (a full service-account JSON pasted into secrets.toml as a table).
+    On Streamlit Cloud, credentials come from Streamlit secrets, in either of
+    two forms:
+      - st.secrets["gcp_service_account_json"]: the ENTIRE downloaded service
+        account JSON file pasted as one triple-quoted TOML string, no
+        reformatting needed. This is the easiest to get right by hand, since
+        it's a straight copy-paste of the file Google gives you - checked
+        first.
+      - st.secrets["gcp_service_account"]: the older approach, the JSON
+        broken out field-by-field into a TOML table. Kept for backward
+        compatibility, but easy to get wrong by hand (casing, missing
+        private_key, trailing commas) - prefer the JSON-string form above.
     Locally, falls back to GOOGLE_APPLICATION_CREDENTIALS / gcloud default
     credentials, exactly as before.
     """
     project_id = os.environ.get("GCP_PROJECT_ID")
+    found_secret = False
 
     if st is not None:
         try:
+            if "gcp_service_account_json" in st.secrets:
+                found_secret = True
+                import json
+                from google.oauth2 import service_account
+                info = json.loads(st.secrets["gcp_service_account_json"])
+                credentials = service_account.Credentials.from_service_account_info(info)
+                return bigquery.Client(
+                    credentials=credentials,
+                    project=project_id or credentials.project_id,
+                )
             if "gcp_service_account" in st.secrets:
+                found_secret = True
                 from google.oauth2 import service_account
                 info = dict(st.secrets["gcp_service_account"])
                 credentials = service_account.Credentials.from_service_account_info(info)
@@ -58,8 +79,28 @@ def get_bq_client() -> bigquery.Client:
                     credentials=credentials,
                     project=project_id or credentials.project_id,
                 )
-        except Exception:
-            pass  # no usable secret - fall through to default credentials
+        except Exception as e:
+            if found_secret:
+                # A secret WAS present but failed to parse/authenticate - this is worth
+                # surfacing clearly rather than silently falling through to a credential
+                # chain that will just fail differently (and more slowly).
+                raise BQReadError(
+                    f"Found a gcp_service_account secret but failed to use it "
+                    f"({type(e).__name__}: {e}). Check the JSON/TOML is complete and unedited."
+                ) from e
+            # else: no secret found at all - fall through to the check below
+
+    # No usable Streamlit secret found. Locally, GOOGLE_APPLICATION_CREDENTIALS covers
+    # this. On Streamlit Cloud there's no such env var and no local gcloud ADC file -
+    # letting bigquery.Client() fall through to google.auth's default credential chain
+    # would spend several seconds timing out against the GCE metadata server before
+    # failing anyway, so fail fast here instead with a clear, immediate message.
+    if st is not None and not found_secret and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+        raise BQReadError(
+            "No BigQuery credentials found. Expected a 'gcp_service_account_json' (or "
+            "'gcp_service_account') entry in Streamlit secrets, or a "
+            "GOOGLE_APPLICATION_CREDENTIALS env var locally. Neither was found."
+        )
 
     if project_id:
         return bigquery.Client(project=project_id)
